@@ -1,0 +1,522 @@
+
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PHẢN ỨNG NHANH - MPPACK</title>
+    <!-- 1. Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: { colors: { codx: { blue: '#0060B6', orange: '#FF5722' } } }
+            }
+        }
+    </script>
+    <!-- 2. React & Libraries -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/recharts@2.10.0/umd/Recharts.js"></script>
+    <!-- 3. Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #0060B6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
+    "recharts": "https://esm.sh/recharts@^3.7.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/"
+  }
+}
+</script>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans antialiased overflow-hidden">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // --- 1. GLOBAL VARIABLES & UTILS ---
+        const { useState, useEffect, useMemo, useRef } = React;
+        const { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } = Recharts;
+
+        // --- 2. ICONS (SVG) ---
+        // Copy of all icons needed
+        const IconBox = ({className}) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>;
+        const IconUsers = ({className}) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>;
+        const IconDashboard = ({className}) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>;
+        const IconFolder = ({className}) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>;
+        const IconSend = ({className}) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>;
+        const IconImage = ({className}) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
+        const IconLogout = ({className, onClick}) => <svg onClick={onClick} className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>;
+        const IconSearch = ({className}) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>;
+        const IconAt = ({className}) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" /></svg>;
+
+        // --- 3. SUB-COMPONENTS (DASHBOARD) ---
+        
+        const Dashboard = ({ documents }) => {
+            const dataLine = [
+                {name: 'T2', v1: 65, v2: 40}, {name: 'T3', v1: 59, v2: 45}, {name: 'T4', v1: 80, v2: 50},
+                {name: 'T5', v1: 81, v2: 60}, {name: 'T6', v1: 56, v2: 55}, {name: 'T7', v1: 55, v2: 40}, {name: 'CN', v1: 40, v2: 30}
+            ];
+            const pieData = [
+                {name: 'Hoàn thành', value: 70, color: '#10B981'},
+                {name: 'Đang xử lý', value: 20, color: '#F59E0B'},
+                {name: 'Lỗi', value: 10, color: '#EF4444'}
+            ];
+
+            return (
+                <div className="p-6 h-full overflow-y-auto">
+                    <h1 className="text-2xl font-bold mb-6 text-gray-800">Dashboard Tổng quan</h1>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                            <h3 className="text-gray-500 text-sm font-bold">Tổng Hồ sơ</h3>
+                            <div className="text-3xl font-bold text-blue-600 mt-2">{documents.length}</div>
+                        </div>
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                            <h3 className="text-gray-500 text-sm font-bold">Chờ duyệt</h3>
+                            <div className="text-3xl font-bold text-orange-500 mt-2">
+                                {documents.filter(d=>d.status==='Chờ duyệt mẫu').length}
+                            </div>
+                        </div>
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                            <h3 className="text-gray-500 text-sm font-bold">Gấp</h3>
+                            <div className="text-3xl font-bold text-red-500 mt-2">
+                                {documents.filter(d=>d.status==='Gấp').length}
+                            </div>
+                        </div>
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                            <h3 className="text-gray-500 text-sm font-bold">Hôm nay</h3>
+                            <div className="text-3xl font-bold text-green-600 mt-2">
+                                {documents.filter(d=>d.arrivalDate === new Date().toISOString().split('T')[0]).length}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-80">
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                            <h3 className="font-bold mb-4 text-gray-700">Lưu lượng sản xuất</h3>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={dataLine}>
+                                    <XAxis dataKey="name" />
+                                    <YAxis />
+                                    <Tooltip />
+                                    <Line type="monotone" dataKey="v1" stroke="#0060B6" strokeWidth={2} />
+                                    <Line type="monotone" dataKey="v2" stroke="#FF5722" strokeWidth={2} />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                             <h3 className="font-bold mb-4 text-gray-700">Tỷ lệ hoàn thành</h3>
+                             <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie data={pieData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                                        {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                                    </Pie>
+                                    <Legend />
+                                    <Tooltip />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+            )
+        }
+
+        // --- 4. SUB-COMPONENTS (USER MOBILE CHAT) ---
+
+        const UserChatInterface = ({ employees, initialDocs }) => {
+            const [step, setStep] = useState('login');
+            const [user, setUser] = useState(null);
+            const [empId, setEmpId] = useState('');
+            const [documents, setDocuments] = useState(initialDocs || []);
+            const [selectedDoc, setSelectedDoc] = useState(null);
+            
+            // Filters
+            const [search, setSearch] = useState('');
+            const [tab, setTab] = useState('mine'); // 'mine' | 'all'
+            const [dateFilter, setDateFilter] = useState('3days');
+            
+            const [chatInput, setChatInput] = useState('');
+            const chatBoxRef = useRef(null);
+
+            useEffect(() => {
+                if(chatBoxRef.current) chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
+            }, [selectedDoc?.history]);
+
+            const handleLogin = () => {
+                const found = employees.find(e => e.id.toLowerCase() === empId.toLowerCase());
+                if(found) {
+                    setUser(found);
+                    setStep('list');
+                } else alert('Mã NV sai (Thử: NV001, NV003)');
+            };
+
+            const isMentioned = (doc) => doc.history?.some(m => !m.isMe && m.message.includes('@'+user.id));
+            
+            const filteredDocs = useMemo(() => {
+                let res = [...documents];
+                if(search) {
+                    const s = search.toLowerCase();
+                    res = res.filter(d => d.title.toLowerCase().includes(s) || d.docNumber.toLowerCase().includes(s));
+                }
+                
+                if(tab === 'mine') {
+                    // Filter: Has unread OR Mentioned
+                    res = res.filter(d => d.unreadCount > 0 || isMentioned(d));
+                }
+                
+                // Date Filter logic
+                const now = new Date();
+                const limit = new Date();
+                if(dateFilter === '3days') limit.setDate(now.getDate()-3);
+                if(dateFilter === '7days') limit.setDate(now.getDate()-7);
+                if(dateFilter === 'today') limit.setHours(0,0,0,0);
+                
+                if(dateFilter !== 'all') {
+                     res = res.filter(d => new Date(d.arrivalDate) >= limit);
+                }
+                
+                return res.sort((a,b) => new Date(b.arrivalDate) - new Date(a.arrivalDate));
+            }, [documents, search, tab, dateFilter, user]);
+
+            const handleSend = () => {
+                if(!chatInput.trim()) return;
+                const nowStr = new Date().toLocaleTimeString();
+                
+                const newMsg = {
+                    id: Date.now().toString(),
+                    user: user.name,
+                    message: chatInput,
+                    timestamp: nowStr,
+                    isMe: true
+                };
+                
+                const updatedDoc = {
+                    ...selectedDoc,
+                    history: [...(selectedDoc.history || []), newMsg],
+                    draftQueue: [...(selectedDoc.draftQueue || []), {type:'text', content: chatInput, autoDept: user.dept}]
+                };
+                
+                setSelectedDoc(updatedDoc);
+                setDocuments(prev => prev.map(d => d.id === updatedDoc.id ? updatedDoc : d));
+                setChatInput('');
+                
+                // Save to Server
+                google.script.run.saveDocumentData(updatedDoc);
+            };
+            
+            const handleUpload = (e) => {
+                const file = e.target.files[0];
+                if(!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const base64 = ev.target.result;
+                    // Optimistic update
+                    const tempId = Date.now().toString();
+                    const newMsg = {
+                            id: tempId, user: user.name, message: 'Đang tải ảnh...', image: base64, timestamp: new Date().toLocaleTimeString(), isMe: true
+                    };
+                    const updatedDoc = {
+                            ...selectedDoc,
+                            history: [...(selectedDoc.history || []), newMsg],
+                    };
+                    setSelectedDoc(updatedDoc);
+                    setDocuments(prev => prev.map(d => d.id === updatedDoc.id ? updatedDoc : d));
+
+                    // Upload to Drive
+                    google.script.run.withSuccessHandler(url => {
+                        alert("Đã tải ảnh lên Drive!");
+                        // In real app, update the image URL from Drive here
+                        // For now we keep base64 for display immediately
+                        const finalDoc = {
+                             ...selectedDoc,
+                             history: [...(selectedDoc.history || []), {...newMsg, message: 'Đã gửi ảnh'}],
+                             draftQueue: [...(selectedDoc.draftQueue || []), {type:'image', content: base64, autoDept: user.dept}]
+                        };
+                         google.script.run.saveDocumentData(finalDoc);
+                    }).uploadImageToDrive(base64, "Upload_"+Date.now());
+                };
+                reader.readAsDataURL(file);
+            };
+
+            if(step === 'login') return (
+                <div className="flex h-full items-center justify-center bg-gray-50">
+                    <div className="bg-white p-8 rounded-xl shadow-xl w-80 text-center">
+                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600"><IconUsers className="w-8 h-8"/></div>
+                        <h2 className="text-xl font-bold mb-4">Đăng Nhập</h2>
+                        <input className="w-full border p-2 rounded mb-4 text-center font-bold uppercase focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Mã NV" value={empId} onChange={e=>setEmpId(e.target.value)}/>
+                        <p className="text-xs text-gray-400 mb-4">Demo: NV001, NV003</p>
+                        <button onClick={handleLogin} className="w-full bg-blue-600 text-white py-2 rounded font-bold hover:bg-blue-700">Vào Ca</button>
+                    </div>
+                </div>
+            );
+
+            if(step === 'chat') return (
+                <div className="flex flex-col h-full bg-gray-100">
+                    <div className="bg-white p-3 shadow flex justify-between items-center shrink-0">
+                        <div className="truncate w-64">
+                            <div className="font-bold text-gray-800">{selectedDoc.title}</div>
+                            <div className="text-xs text-blue-600 bg-blue-50 inline-block px-1 rounded font-bold">{selectedDoc.productionOrder || 'Chưa có phiếu'}</div>
+                        </div>
+                        <button onClick={()=>setStep('list')} className="text-red-500 border border-red-200 bg-red-50 px-3 py-1 rounded text-xs font-bold">Thoát</button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3" ref={chatBoxRef}>
+                        {selectedDoc.history.map((msg, i) => (
+                            <div key={i} className={`flex gap-2 ${msg.isMe?'flex-row-reverse':''}`}>
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 ${msg.isMe?'bg-blue-500':'bg-gray-400'}`}>{msg.user.charAt(0)}</div>
+                                <div className={`p-3 rounded-xl max-w-[80%] text-sm shadow-sm ${msg.isMe?'bg-blue-600 text-white rounded-br-none':'bg-white text-gray-800 rounded-bl-none'}`}>
+                                    <div className={`text-[10px] font-bold mb-1 opacity-80 ${msg.isMe ? 'text-blue-100' : 'text-gray-500'}`}>{msg.user} - {msg.timestamp}</div>
+                                    <p>{msg.message}</p>
+                                    {msg.image && <img src={msg.image} className="mt-2 rounded w-full border-2 border-white/30"/>}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="p-3 bg-white flex gap-2 items-center border-t shrink-0">
+                        <label className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full cursor-pointer transition"><IconImage className="w-6 h-6 text-gray-600"/><input type="file" hidden onChange={handleUpload}/></label>
+                        <input className="flex-1 bg-gray-100 rounded-full px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500" value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleSend()} placeholder="Nhập tin nhắn..."/>
+                        <button onClick={handleSend} className="bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 shadow-lg"><IconSend className="w-5 h-5"/></button>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="flex flex-col h-full bg-gray-50">
+                    <div className="bg-[#0060B6] p-4 text-white flex justify-between items-center shadow-lg shrink-0">
+                        <div className="font-bold flex items-center gap-2"><IconBox className="w-5 h-5"/> SX Mobile</div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs bg-white/20 px-2 py-1 rounded font-bold">{user.name}</span>
+                            <IconLogout className="w-5 h-5 cursor-pointer hover:opacity-80" onClick={()=>{setStep('login'); setEmpId('');}}/>
+                        </div>
+                    </div>
+                    
+                    <div className="bg-white p-3 shadow-sm z-10 shrink-0">
+                        <div className="relative mb-3">
+                            <input className="w-full bg-gray-100 pl-9 p-2 rounded-lg outline-none focus:ring-1 focus:ring-blue-400" placeholder="Tìm SKU, Phiếu SX..." value={search} onChange={e=>setSearch(e.target.value)}/>
+                            <IconSearch className="absolute left-2 top-2.5 w-5 h-5 text-gray-400"/>
+                        </div>
+                        <div className="flex gap-2 mb-2">
+                            <button onClick={()=>setTab('mine')} className={`flex-1 py-1.5 rounded text-sm font-bold flex justify-center items-center gap-1 transition ${tab==='mine'?'bg-blue-50 text-blue-600 border border-blue-200':'text-gray-500 hover:bg-gray-50'}`}>
+                                <IconAt className="w-4 h-4"/> Của tôi 
+                                {documents.filter(d=>d.unreadCount>0 || isMentioned(d)).length > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full ml-1">{documents.filter(d=>d.unreadCount>0 || isMentioned(d)).length}</span>}
+                            </button>
+                            <button onClick={()=>setTab('all')} className={`flex-1 py-1.5 rounded text-sm font-bold flex justify-center items-center gap-1 transition ${tab==='all'?'bg-blue-50 text-blue-600 border border-blue-200':'text-gray-500 hover:bg-gray-50'}`}>
+                                <IconFolder className="w-4 h-4"/> Tất cả
+                            </button>
+                        </div>
+                        {tab === 'all' && (
+                            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                                {['today','3days','7days','all'].map(k => (
+                                    <button key={k} onClick={()=>setDateFilter(k)} className={`px-3 py-1 rounded-full text-xs font-bold border transition ${dateFilter===k?'bg-gray-800 text-white border-gray-800':'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
+                                        {k==='all'?'Toàn bộ': k==='today'?'Hôm nay':`${k.replace('days','')} ngày`}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-20">
+                        {filteredDocs.map(doc => (
+                            <div key={doc.id} onClick={()=>{setSelectedDoc({...doc, unreadCount:0}); setStep('chat');}} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 relative cursor-pointer active:scale-95 transition-transform">
+                                {doc.unreadCount > 0 && <div className="absolute top-3 right-3 w-3 h-3 bg-red-500 rounded-full animate-pulse ring-2 ring-white"></div>}
+                                <h4 className="font-bold text-gray-800 truncate pr-4 text-sm">{doc.title}</h4>
+                                <div className="flex justify-between items-center mt-2">
+                                    <span className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-600 font-mono">{doc.docNumber}</span>
+                                    <span className="text-xs font-bold text-blue-600">{doc.productionOrder||'---'}</span>
+                                </div>
+                                <div className="text-[10px] text-gray-400 mt-2 flex justify-between">
+                                    <span>{doc.arrivalDate}</span>
+                                    {isMentioned(doc) && <span className="bg-orange-100 text-orange-600 px-1.5 rounded font-bold flex items-center"><IconAt className="w-3 h-3 mr-1"/>Nhắc tên</span>}
+                                </div>
+                            </div>
+                        ))}
+                        {filteredDocs.length === 0 && (
+                            <div className="text-center text-gray-400 mt-10">
+                                <div className="bg-gray-100 p-4 rounded-full w-16 h-16 mx-auto mb-2 flex items-center justify-center">
+                                    <IconFolder className="w-8 h-8 text-gray-300"/>
+                                </div>
+                                <p>Không có hồ sơ</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )
+        }
+
+        // --- 5. SUB-COMPONENTS (ADMIN DOC MANAGER) ---
+        const AdminDocManager = ({documents, onSave}) => {
+            const [selected, setSelected] = useState(documents[0]);
+            const [tab, setTab] = useState('Overview');
+            const deptOptions = ['SÓNG', 'IN', 'THÀNH PHẨM', 'KHO'];
+            
+            return (
+                <div className="flex h-full">
+                    {/* List Sidebar */}
+                    <div className="w-80 bg-white border-r border-gray-200 overflow-y-auto hidden md:block">
+                        <div className="p-4 border-b font-bold text-lg text-gray-700">Danh sách Hồ sơ</div>
+                        {documents.map(d => (
+                            <div key={d.id} onClick={()=>setSelected(d)} className={`p-4 border-b cursor-pointer hover:bg-gray-50 transition ${selected?.id===d.id?'bg-blue-50 border-l-4 border-blue-600':''}`}>
+                                <div className={`font-bold text-sm ${selected?.id===d.id?'text-blue-700':'text-gray-700'}`}>{d.title}</div>
+                                <div className="flex justify-between mt-2 text-xs">
+                                    <span className="bg-gray-100 px-2 rounded text-gray-500 font-mono">{d.docNumber}</span>
+                                    <span className="text-blue-600 font-bold">{d.productionOrder||'--'}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    {/* Detail View */}
+                    <div className="flex-1 bg-gray-50 flex flex-col overflow-hidden">
+                        {selected ? (
+                            <>
+                                <div className="bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm shrink-0">
+                                    <h2 className="text-xl font-bold text-gray-800 truncate">{selected.title}</h2>
+                                    <div className="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-bold whitespace-nowrap">{selected.status}</div>
+                                </div>
+                                <div className="flex gap-6 px-6 bg-white border-b text-sm font-bold text-gray-500 shrink-0">
+                                    {['Overview', 'Chat', 'Review'].map(t => (
+                                        <button key={t} onClick={()=>setTab(t)} className={`py-3 border-b-2 transition ${tab===t?'border-blue-600 text-blue-600':'border-transparent hover:text-gray-800'}`}>{t}</button>
+                                    ))}
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-6">
+                                    {tab === 'Overview' && (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                                                <h3 className="font-bold mb-4 text-gray-800">Thông tin chung</h3>
+                                                <div className="space-y-4">
+                                                    <div><label className="text-xs text-gray-500 font-bold uppercase">Khách hàng</label><div className="font-medium">{selected.clientName}</div></div>
+                                                    <div><label className="text-xs text-gray-500 font-bold uppercase">Mã SKU</label><div className="font-medium">{selected.docNumber}</div></div>
+                                                    <div>
+                                                        <label className="text-xs text-blue-500 font-bold uppercase">Phiếu Sản Xuất</label>
+                                                        <input className="border border-blue-200 bg-blue-50 p-2 rounded w-full font-bold text-blue-800 mt-1 outline-none focus:ring-2 focus:ring-blue-300" 
+                                                            value={selected.productionOrder||''} 
+                                                            onChange={(e)=>{
+                                                                const updated = {...selected, productionOrder: e.target.value};
+                                                                setSelected(updated);
+                                                            }} 
+                                                            onBlur={()=>onSave(selected)}/>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    {tab === 'Chat' && (
+                                        <div className="bg-white rounded-xl border h-full flex flex-col shadow-sm">
+                                            <div className="flex-1 p-4 overflow-y-auto space-y-3">
+                                                {selected.history.map((msg, i)=>(
+                                                    <div key={i} className={`p-3 rounded-lg max-w-[80%] text-sm ${msg.isMe?'ml-auto bg-blue-600 text-white rounded-br-none':'bg-gray-100 rounded-bl-none'}`}>
+                                                        <div className={`font-bold text-[10px] opacity-70 mb-1 ${msg.isMe?'text-blue-100':'text-gray-500'}`}>{msg.user}</div>
+                                                        {msg.message}
+                                                        {msg.image && <img src={msg.image} className="mt-2 w-full rounded border-2 border-white/20"/>}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {tab === 'Review' && (
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                            {deptOptions.map(dept => {
+                                                const drafts = selected.draftQueue.filter(d => d.autoDept === dept);
+                                                return (
+                                                    <div key={dept} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                                                        <div className="font-bold mb-3 flex justify-between text-gray-700">
+                                                            <span>{dept}</span>
+                                                            {drafts.length > 0 && <span className="bg-red-500 text-white px-2 py-0.5 rounded-full text-xs animate-pulse">{drafts.length} tin mới</span>}
+                                                        </div>
+                                                        {drafts.length > 0 && (
+                                                            <div className="mb-3 flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                                                                {drafts.map((d, idx) => (
+                                                                    <div key={idx} className="w-16 h-16 bg-gray-100 rounded border shrink-0 flex items-center justify-center text-xs overflow-hidden">
+                                                                        {d.type==='image'?<img src={d.content} className="w-full h-full object-cover"/> : 'TXT'}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                        <textarea className="w-full border rounded p-2 text-sm h-20 outline-none focus:border-blue-500" placeholder="Ghi chú lỗi..."></textarea>
+                                                        <button className="w-full mt-2 bg-gray-50 hover:bg-blue-600 hover:text-white text-blue-600 py-2 rounded text-sm font-bold transition-colors border border-blue-100" onClick={()=>alert('Đã lưu (Demo)')}>Lưu {dept}</button>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        ) : <div className="flex items-center justify-center h-full text-gray-400">Chọn hồ sơ</div>}
+                    </div>
+                </div>
+            )
+        }
+
+        // --- 6. MAIN APP COMPONENT ---
+
+        const App = () => {
+            const [data, setData] = useState(null);
+            const [view, setView] = useState('dashboard'); // dashboard | chat | admin-docs
+
+            // Fetch Data from Server (Code.gs)
+            useEffect(() => {
+                // If run locally (not in GAS), google is undefined
+                if(typeof google !== 'undefined' && google.script) {
+                    google.script.run.withSuccessHandler((serverData) => {
+                        if(serverData.error) alert(serverData.error);
+                        else setData(serverData);
+                    }).getInitialData();
+                } else {
+                    // Fallback for local testing if needed, though strictly requested for Apps Script
+                    alert("App must run in Google Apps Script environment.");
+                }
+            }, []);
+
+            if(!data) return <div className="h-screen w-screen flex flex-col items-center justify-center bg-gray-50"><div className="loader mb-4"></div><p className="text-gray-500 font-medium">Đang tải dữ liệu từ Google Sheet...</p></div>;
+
+            const handleAdminSave = (doc) => {
+                 const newDocs = data.documents.map(d => d.id === doc.id ? doc : d);
+                 setData({...data, documents: newDocs});
+                 google.script.run.saveDocumentData(doc);
+            };
+
+            return (
+                <div className="flex h-screen w-screen overflow-hidden">
+                    {/* Sidebar */}
+                    <div className="w-20 bg-[#0060B6] flex flex-col items-center py-6 gap-6 text-white shrink-0 shadow-xl z-20">
+                         <div className="p-2 bg-white/20 rounded-xl mb-4"><IconBox className="w-8 h-8 text-white"/></div>
+                         <button onClick={()=>setView('dashboard')} className={`p-3 rounded-xl transition-all ${view==='dashboard'?'bg-white text-blue-600 shadow-lg scale-110':'hover:bg-white/10 text-white/70'}`} title="Dashboard"><IconDashboard className="w-6 h-6"/></button>
+                         <button onClick={()=>setView('admin-docs')} className={`p-3 rounded-xl transition-all ${view==='admin-docs'?'bg-white text-blue-600 shadow-lg scale-110':'hover:bg-white/10 text-white/70'}`} title="Quản lý Hồ sơ"><IconFolder className="w-6 h-6"/></button>
+                         <button onClick={()=>setView('chat')} className={`p-3 rounded-xl transition-all ${view==='chat'?'bg-white text-blue-600 shadow-lg scale-110':'hover:bg-white/10 text-white/70'}`} title="Mobile Chat App"><IconSend className="w-6 h-6"/></button>
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 bg-gray-100 overflow-hidden relative">
+                         {view === 'dashboard' && <Dashboard documents={data.documents} />}
+                         
+                         {view === 'chat' && (
+                             <div className="h-full flex items-center justify-center bg-slate-200 p-4">
+                                 <div className="w-full max-w-[400px] h-full max-h-[850px] bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-300 relative">
+                                     {/* This renders the mobile app inside the container */}
+                                     <UserChatInterface employees={data.employees} initialDocs={data.documents} />
+                                 </div>
+                             </div>
+                         )}
+
+                         {view === 'admin-docs' && (
+                             <AdminDocManager documents={data.documents} onSave={handleAdminSave} />
+                         )}
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
