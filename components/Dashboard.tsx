@@ -36,6 +36,8 @@ const Dashboard: React.FC = () => {
 
   const handleExportPdf = () => {
       setIsGeneratingPdf(true);
+      
+      // Kiểm tra môi trường: Nếu có Google Script (GAS) thì chạy thật, không thì chạy Demo
       // @ts-ignore
       if(typeof google !== 'undefined' && google.script) {
           // @ts-ignore
@@ -54,11 +56,11 @@ const Dashboard: React.FC = () => {
             })
             .createExecutiveReport();
       } else {
-          // Fallback for local testing
+          // Fallback for Vercel / Demo Mode
           setTimeout(() => {
               setIsGeneratingPdf(false);
-              alert("Tính năng này cần chạy trên môi trường Google Apps Script.");
-          }, 2000);
+              alert("MÔ PHỎNG: Đã xuất báo cáo PDF thành công!\n(File sẽ được tải về trong môi trường thực tế)");
+          }, 1500);
       }
   };
 

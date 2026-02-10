@@ -117,11 +117,16 @@ const DocumentDetail: React.FC<DocumentDetailProps> = ({ document, onSave }) => 
             })
             .createDocumentSpreadsheet(updatedDoc);
       } else {
-          // Fallback for local dev
+          // Fallback for local dev / Vercel
           setTimeout(() => {
               setIsExporting(false);
-              alert("Chức năng này cần chạy trên môi trường Google Apps Script.");
-          }, 1000);
+              const mockUrl = "https://docs.google.com/spreadsheets/u/0/";
+              const finalDoc = { ...updatedDoc, spreadsheetUrl: mockUrl };
+              setFormData(finalDoc);
+              onSave(finalDoc);
+              alert("MÔ PHỎNG: Đã tạo file Google Sheet thành công!\n(Đã cập nhật link giả lập vào hồ sơ)");
+              window.open(mockUrl, '_blank');
+          }, 1500);
       }
   };
 
