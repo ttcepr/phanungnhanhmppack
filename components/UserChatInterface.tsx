@@ -3,6 +3,8 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { mockDocuments } from '../services/mockData';
 import { DocumentData, ChatMessage, DraftItem, DeptType, Employee, TCKTRecord } from '../types';
 import { IconSearch, IconPlus, IconSend, IconImage, IconBox, IconUsers, IconCheck, IconFolder, IconLogout, IconAt, IconCalendar, IconClock, IconFilter } from './Icons';
+import { compressImage } from '../utils/helpers';
+import ImageViewer from './ImageViewer';
 
 // Dept options
 const deptOptions: DeptType[] = ['SÓNG', 'IN', 'THÀNH PHẨM', 'KHO'];
@@ -17,7 +19,6 @@ interface UserChatInterfaceProps {
 
 const UserChatInterface: React.FC<UserChatInterfaceProps> = ({ user, onLogout }) => {
     // Steps: search (dashboard) -> confirm -> chat
-    // Login step removed, handled by App.tsx
     const [step, setStep] = useState<'search' | 'confirm' | 'chat'>('search');
     
     // Internal user state derived from prop or fallback
@@ -40,6 +41,9 @@ const UserChatInterface: React.FC<UserChatInterfaceProps> = ({ user, onLogout })
     const [chatInput, setChatInput] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
+
+    // Image Viewer State
+    const [viewImage, setViewImage] = useState<string | null>(null);
 
     // Local State for Documents
     const [localDocuments, setLocalDocuments] = useState<DocumentData[]>([]);
@@ -192,7 +196,6 @@ const UserChatInterface: React.FC<UserChatInterfaceProps> = ({ user, onLogout })
         // TCKT Logic
         let updatedTCKT = selectedDoc.tcktRecords || [];
         if (isTCKT) {
-            // Remove 'TCKT:' prefix for cleaner storage, or keep it. User asked to push info.
             const content = chatInput.substring(5).trim(); 
             updatedTCKT = [...updatedTCKT, {
                 id: `tckt-${Date.now()}`,
@@ -212,67 +215,68 @@ const UserChatInterface: React.FC<UserChatInterfaceProps> = ({ user, onLogout })
         if(isTCKT) alert('Đã lưu nội dung vào Tiêu Chuẩn Kỹ Thuật (TCKT)');
     };
 
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0 && selectedDoc && loggedInUser) {
-            const files = Array.from(e.target.files);
+            const files = Array.from(e.target.files) as File[];
             const timestamp = getFullTimestamp();
             const dateKey = new Date().toISOString().split('T')[0];
             const displayName = `${loggedInUser.name} (${userDept})`;
             const isTCKT = chatInput.toUpperCase().startsWith('TCKT:');
 
-            files.forEach(file => {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                   if (event.target?.result) {
-                       const resultStr = event.target.result as string;
-                       
-                       const newMsg: ChatMessage = {
-                          id: `img-msg-${Date.now()}-${Math.random()}`,
-                          user: displayName,
-                          avatar: loggedInUser.avatar || 'https://picsum.photos/40/40?random=88',
-                          message: isTCKT ? `TCKT Img: ${chatInput}` : 'Đã gửi hình ảnh',
-                          image: resultStr,
-                          timestamp: timestamp,
-                          isMe: true
-                      };
-                      
-                      const newDraft: DraftItem = {
-                          id: `draft-${Date.now()}-${Math.random()}`,
-                          type: 'image',
-                          content: resultStr,
-                          timestamp: timestamp,
-                          autoDept: userDept
-                      };
+            for (const file of files) {
+                try {
+                    // Compress image before processing
+                    const compressedBase64 = await compressImage(file);
+                    
+                    const newMsg: ChatMessage = {
+                        id: `img-msg-${Date.now()}-${Math.random()}`,
+                        user: displayName,
+                        avatar: loggedInUser.avatar || 'https://picsum.photos/40/40?random=88',
+                        message: isTCKT ? `TCKT Img: ${chatInput}` : 'Đã gửi hình ảnh',
+                        image: compressedBase64,
+                        timestamp: timestamp,
+                        isMe: true
+                    };
+                    
+                    const newDraft: DraftItem = {
+                        id: `draft-${Date.now()}-${Math.random()}`,
+                        type: 'image',
+                        content: compressedBase64,
+                        timestamp: timestamp,
+                        autoDept: userDept
+                    };
 
-                      setSelectedDoc(prev => {
-                          if (!prev) return null;
-                          let currentTCKT = prev.tcktRecords || [];
-                          
-                          if (isTCKT) {
-                              currentTCKT = [...currentTCKT, {
-                                  id: `tckt-img-${Date.now()}-${Math.random()}`,
-                                  timestamp: timestamp,
-                                  date: dateKey,
-                                  productionOrder: prev.productionOrder || productionOrder || 'N/A',
-                                  user: displayName,
-                                  content: chatInput.substring(5).trim() || 'Hình ảnh TCKT',
-                                  images: [resultStr]
-                              }];
-                          }
+                    setSelectedDoc(prev => {
+                        if (!prev) return null;
+                        let currentTCKT = prev.tcktRecords || [];
+                        
+                        if (isTCKT) {
+                            currentTCKT = [...currentTCKT, {
+                                id: `tckt-img-${Date.now()}-${Math.random()}`,
+                                timestamp: timestamp,
+                                date: dateKey,
+                                productionOrder: prev.productionOrder || productionOrder || 'N/A',
+                                user: displayName,
+                                content: chatInput.substring(5).trim() || 'Hình ảnh TCKT',
+                                images: [compressedBase64]
+                            }];
+                        }
 
-                          const updated = {
-                              ...prev,
-                              history: [...(prev.history || []), newMsg],
-                              draftQueue: [...(prev.draftQueue || []), newDraft],
-                              tcktRecords: currentTCKT
-                          };
-                          setLocalDocuments(docs => docs.map(d => d.id === updated.id ? updated : d));
-                          return updated;
-                      });
-                   }
-                };
-                reader.readAsDataURL(file as Blob);
-            });
+                        const updated = {
+                            ...prev,
+                            history: [...(prev.history || []), newMsg],
+                            draftQueue: [...(prev.draftQueue || []), newDraft],
+                            tcktRecords: currentTCKT
+                        };
+                        setLocalDocuments(docs => docs.map(d => d.id === updated.id ? updated : d));
+                        return updated;
+                    });
+                } catch (error) {
+                    console.error("Image processing error", error);
+                    alert("Lỗi khi xử lý ảnh");
+                }
+            }
+
             if (fileInputRef.current) fileInputRef.current.value = '';
             if (isTCKT) {
                 setChatInput(''); 
@@ -283,6 +287,12 @@ const UserChatInterface: React.FC<UserChatInterfaceProps> = ({ user, onLogout })
 
     return (
         <div className="flex flex-col h-full bg-white max-w-md mx-auto shadow-2xl overflow-hidden font-sans relative">
+            
+            {/* ImageViewer Modal */}
+            {viewImage && (
+                <ImageViewer src={viewImage} onClose={() => setViewImage(null)} />
+            )}
+
             {/* Header */}
             <div className="bg-[#0060B6] p-4 text-white shadow-md z-10">
                 <div className="flex justify-between items-center">
@@ -548,7 +558,12 @@ const UserChatInterface: React.FC<UserChatInterfaceProps> = ({ user, onLogout })
                                         </div>
                                         <p className="text-sm whitespace-pre-wrap">{chat.message}</p>
                                         {chat.image && (
-                                            <img src={chat.image} className="mt-2 rounded-lg border border-white/20 w-full object-cover max-h-64" alt="sent" />
+                                            <img 
+                                                src={chat.image} 
+                                                className="mt-2 rounded-lg border border-white/20 w-full object-cover max-h-64 cursor-zoom-in hover:opacity-90 transition-opacity" 
+                                                alt="sent" 
+                                                onClick={() => setViewImage(chat.image!)}
+                                            />
                                         )}
                                     </div>
                                 </div>

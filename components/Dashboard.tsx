@@ -1,16 +1,18 @@
-import React from 'react';
+
+import React, { useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend } from 'recharts';
 import { dashboardStats } from '../services/mockData';
-import { IconDocument, IconAlert, IconCheckCircle, IconPlus } from './Icons';
+import { IconDocument, IconAlert, IconCheckCircle, IconPlus, IconPrinter } from './Icons';
 
+// Cập nhật dữ liệu: Chỉ còn 1 dòng dữ liệu cho Bộ phận Sản xuất (số lượng hồ sơ)
 const dataLine = [
-  { name: 'T2', p21: 60, p22: 40, p81: 20 },
-  { name: 'T3', p21: 65, p22: 30, p81: 35 },
-  { name: 'T4', p21: 68, p22: 38, p81: 40 },
-  { name: 'T5', p21: 75, p22: 48, p81: 42 },
-  { name: 'T6', p21: 78, p22: 52, p81: 40 },
-  { name: 'T7', p21: 85, p22: 60, p81: 62 },
-  { name: 'CN', p21: 90, p22: 55, p81: 60 },
+  { name: 'T2', hoSo: 120 },
+  { name: 'T3', hoSo: 135 },
+  { name: 'T4', hoSo: 110 },
+  { name: 'T5', hoSo: 155 },
+  { name: 'T6', hoSo: 140 },
+  { name: 'T7', hoSo: 180 },
+  { name: 'CN', hoSo: 95 },
 ];
 
 const StatCard = ({ title, count, subtitle, icon, colorClass, trend }: { title: string, count: number, subtitle?: string, icon?: React.ReactNode, colorClass: string, trend?: string }) => (
@@ -30,6 +32,36 @@ const StatCard = ({ title, count, subtitle, icon, colorClass, trend }: { title: 
 );
 
 const Dashboard: React.FC = () => {
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
+  const handleExportPdf = () => {
+      setIsGeneratingPdf(true);
+      // @ts-ignore
+      if(typeof google !== 'undefined' && google.script) {
+          // @ts-ignore
+          google.script.run
+            .withSuccessHandler((response: any) => {
+                setIsGeneratingPdf(false);
+                if(response.success) {
+                    window.open(response.url, '_blank');
+                } else {
+                    alert('Lỗi tạo báo cáo: ' + response.error);
+                }
+            })
+            .withFailureHandler((err: any) => {
+                setIsGeneratingPdf(false);
+                alert('Lỗi hệ thống: ' + err);
+            })
+            .createExecutiveReport();
+      } else {
+          // Fallback for local testing
+          setTimeout(() => {
+              setIsGeneratingPdf(false);
+              alert("Tính năng này cần chạy trên môi trường Google Apps Script.");
+          }, 2000);
+      }
+  };
+
   return (
     <div className="flex flex-col h-full bg-slate-50 p-6 overflow-y-auto no-scrollbar pb-20">
       {/* Header */}
@@ -38,9 +70,27 @@ const Dashboard: React.FC = () => {
             <h1 className="text-2xl font-bold text-gray-800">Tổng quan Hệ thống</h1>
             <p className="text-sm text-gray-500 mt-1">Cập nhật lúc {new Date().toLocaleTimeString()}</p>
         </div>
-        <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm transition">
-             <IconPlus className="w-4 h-4" /> Báo cáo nhanh
-        </button>
+        <div className="flex gap-2">
+            <button 
+                onClick={handleExportPdf}
+                disabled={isGeneratingPdf}
+                className={`bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-sm transition ${isGeneratingPdf ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+                {isGeneratingPdf ? (
+                    <>
+                        <div className="w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin"></div>
+                        Đang tạo PDF...
+                    </>
+                ) : (
+                    <>
+                        <IconPrinter className="w-4 h-4 text-gray-600" /> Xuất Báo cáo PDF
+                    </>
+                )}
+            </button>
+            <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm transition">
+                <IconPlus className="w-4 h-4" /> Báo cáo nhanh
+            </button>
+        </div>
       </div>
 
       {/* Top Stats Row */}
@@ -77,10 +127,10 @@ const Dashboard: React.FC = () => {
 
       {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* Main Traffic Chart */}
+        {/* Main Traffic Chart - Single Line for Production Dept */}
         <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
             <div className="flex justify-between items-center mb-6">
-                <h3 className="font-bold text-gray-800">Lưu lượng Xử lý Hồ sơ</h3>
+                <h3 className="font-bold text-gray-800">Lưu lượng xử lý (Bộ phận Sản xuất)</h3>
                 <select className="text-sm border-gray-200 rounded-md text-gray-500 bg-gray-50 border p-1 outline-none">
                     <option>Tuần này</option>
                     <option>Tháng này</option>
@@ -92,8 +142,7 @@ const Dashboard: React.FC = () => {
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9CA3AF', fontSize: 12}} />
                     <YAxis axisLine={false} tickLine={false} tick={{fill: '#9CA3AF', fontSize: 12}} />
                     <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'}} />
-                    <Line type="monotone" dataKey="p21" name="Phòng HCNS" stroke="#2563EB" strokeWidth={3} dot={{r: 4}} activeDot={{r: 6}} />
-                    <Line type="monotone" dataKey="p22" name="Phòng Kế toán" stroke="#10B981" strokeWidth={3} dot={false} />
+                    <Line type="monotone" dataKey="hoSo" name="Số lượng Hồ sơ" stroke="#2563EB" strokeWidth={3} dot={{r: 4}} activeDot={{r: 6}} />
                     <Legend iconType="circle" />
                 </LineChart>
                 </ResponsiveContainer>

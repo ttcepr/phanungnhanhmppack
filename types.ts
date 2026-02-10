@@ -11,11 +11,21 @@ export type DeptType = 'SÓNG' | 'IN' | 'THÀNH PHẨM' | 'KHO';
 export interface Employee {
   id: string; // Mã NV (VD: NV001)
   name: string;
+  password?: string; // Mật khẩu đăng nhập
   role: string;
   dept: DeptType | 'VĂN PHÒNG';
   status: 'Online' | 'Offline' | 'Busy';
   avatar?: string;
   isAdmin?: boolean; // New field to determine access level
+}
+
+export interface LoginLog {
+  id: string;
+  userId: string;
+  userName: string;
+  timestamp: string; // ISO String
+  deviceInfo: string; // "Chrome on Windows", etc.
+  status: 'Success' | 'Failed';
 }
 
 export interface ProductionError {
@@ -97,6 +107,7 @@ export interface DocumentData {
   type?: string;
   pageCount?: number;
   securityLevel?: string;
+  spreadsheetUrl?: string; // Link to the specific Google Sheet for this document
 }
 
 export interface ChatMessage {

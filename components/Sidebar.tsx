@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { IconDashboard, IconChart, IconFolder, IconBell, IconUsers, IconSettings, IconSend, IconLogout } from './Icons';
+import { IconDashboard, IconChart, IconFolder, IconBell, IconUsers, IconSettings, IconSend, IconLogout, IconHistory, IconMessage } from './Icons';
 
 interface SidebarProps {
   currentView: string;
@@ -14,10 +14,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout }
   const menuItems = [
     { id: 'dashboard', icon: <IconDashboard className="w-6 h-6" />, label: 'Dashboard' },
     { id: 'documents', icon: <IconFolder className="w-6 h-6" />, label: 'Khách hàng' },
+    { id: 'admin-chat', icon: <IconMessage className="w-6 h-6" />, label: 'Chat Hệ thống' }, // New Item
     { id: 'notifications', icon: <IconBell className="w-6 h-6" />, label: 'Thông báo' },
     { id: 'reports', icon: <IconChart className="w-6 h-6" />, label: 'Báo cáo' },
     { id: 'employees', icon: <IconUsers className="w-6 h-6" />, label: 'Nhân viên' },
-    { id: 'chat-user', icon: <IconSend className="w-6 h-6" />, label: 'Chat User Demo' }, 
+    { id: 'chat-user', icon: <IconSend className="w-6 h-6" />, label: 'Chat User Demo' },
+    { id: 'history', icon: <IconHistory className="w-6 h-6" />, label: 'Lịch sử' },
     { id: 'settings', icon: <IconSettings className="w-6 h-6" />, label: 'Thiết lập' },
   ];
 

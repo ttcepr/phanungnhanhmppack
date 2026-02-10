@@ -1,7 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { DocumentData, ChatMessage, SavedRecord, DeptType, ProductionError, DraftItem, TCKTRecord } from '../types';
-import { IconSave, IconSend, IconUpload, IconCheck, IconImage, IconTransfer, IconBox, IconWave, IconInk, IconScissor, IconWarehouse, IconPlus, IconSettings, IconUsers, IconCalendar } from './Icons';
+import { DocumentData, ChatMessage, SavedRecord, DeptType, ProductionError, DraftItem, TCKTRecord, DocStatus } from '../types';
+import { IconSave, IconSend, IconUpload, IconCheck, IconImage, IconTransfer, IconBox, IconWave, IconInk, IconScissor, IconWarehouse, IconPlus, IconSettings, IconUsers, IconCalendar, IconDatabase } from './Icons';
+import { compressImage } from '../utils/helpers';
+import ImageViewer from './ImageViewer';
 
 interface DocumentDetailProps {
   document: DocumentData | null;
@@ -39,6 +41,12 @@ const DocumentDetail: React.FC<DocumentDetailProps> = ({ document, onSave }) => 
   
   // Editing State
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
+  
+  // Image Viewer State
+  const [viewImage, setViewImage] = useState<string | null>(null);
+  
+  // Export State
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     if (document) {
@@ -70,6 +78,53 @@ const DocumentDetail: React.FC<DocumentDetailProps> = ({ document, onSave }) => 
     setFormData(prev => prev ? { ...prev, [name]: value } : null);
   };
   
+  // --- EXPORT TO SHEET LOGIC ---
+  const handleExportToSheet = () => {
+      if (!formData) return;
+      
+      const confirmMsg = "Bạn có chắc chắn muốn duyệt và tạo hồ sơ Google Sheet không?\nHệ thống sẽ tạo 1 file riêng và upload toàn bộ hình ảnh lên đó.";
+      if (!confirm(confirmMsg)) return;
+
+      setIsExporting(true);
+      
+      // Update status locally first
+      const updatedDoc = {
+          ...formData,
+          status: DocStatus.APPROVED
+      };
+      setFormData(updatedDoc);
+      
+      // Call Google Script
+      // @ts-ignore
+      if (typeof google !== 'undefined' && google.script) {
+          // @ts-ignore
+          google.script.run
+            .withSuccessHandler((response: any) => {
+                setIsExporting(false);
+                if (response.success) {
+                    const finalDoc = { ...updatedDoc, spreadsheetUrl: response.url };
+                    setFormData(finalDoc);
+                    onSave(finalDoc);
+                    alert(`Đã xuất hồ sơ thành công!\nFile: ${response.name}`);
+                    window.open(response.url, '_blank');
+                } else {
+                    alert('Lỗi khi xuất file: ' + response.error);
+                }
+            })
+            .withFailureHandler((err: any) => {
+                setIsExporting(false);
+                alert('Lỗi hệ thống: ' + err);
+            })
+            .createDocumentSpreadsheet(updatedDoc);
+      } else {
+          // Fallback for local dev
+          setTimeout(() => {
+              setIsExporting(false);
+              alert("Chức năng này cần chạy trên môi trường Google Apps Script.");
+          }, 1000);
+      }
+  };
+
   // --- CHAT LOGIC ---
   const handleSendChat = () => {
       if(!chatInput.trim() || !formData.history) return;
@@ -126,62 +181,60 @@ const DocumentDetail: React.FC<DocumentDetailProps> = ({ document, onSave }) => 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files[0] && formData.history) {
           const file = e.target.files[0];
-          const reader = new FileReader();
           const isTCKT = chatInput.toUpperCase().startsWith('TCKT:'); // Check input box for TCKT tag
 
-          reader.onload = (event) => {
-             if (event.target?.result) {
-                 const resultStr = event.target.result as string;
-                 const now = new Date();
-                 const timestamp = `${now.toLocaleDateString('en-GB')} ${now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
-                 const dateKey = now.toISOString().split('T')[0];
+          compressImage(file).then(resultStr => {
+             const now = new Date();
+             const timestamp = `${now.toLocaleDateString('en-GB')} ${now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+             const dateKey = now.toISOString().split('T')[0];
 
-                 const newMsg: ChatMessage = {
-                    id: Date.now().toString(),
+             const newMsg: ChatMessage = {
+                id: Date.now().toString(),
+                user: `Nhân viên ${currentUserDept}`,
+                avatar: 'https://picsum.photos/40/40?random=99',
+                message: isTCKT ? `TCKT Image: ${chatInput}` : 'Đã gửi một hình ảnh',
+                image: resultStr,
+                timestamp: timestamp,
+                isMe: true
+            };
+            
+            const updatedHistory = [...(formData.history || []), newMsg];
+            
+            const newDraft: DraftItem = {
+                id: `draft-${Date.now()}`,
+                type: 'image',
+                content: resultStr,
+                timestamp: timestamp,
+                autoDept: currentUserDept
+            };
+            const updatedDrafts = [...(formData.draftQueue || []), newDraft];
+
+            // TCKT Logic for Image
+            let updatedTCKT = formData.tcktRecords || [];
+            if (isTCKT) {
+                const tcktContent = chatInput.substring(5).trim() || 'Hình ảnh TCKT';
+                const newTCKT: TCKTRecord = {
+                    id: `tckt-${Date.now()}`,
+                    timestamp: timestamp,
+                    date: dateKey,
+                    productionOrder: formData.productionOrder || 'N/A',
                     user: `Nhân viên ${currentUserDept}`,
-                    avatar: 'https://picsum.photos/40/40?random=99',
-                    message: isTCKT ? `TCKT Image: ${chatInput}` : 'Đã gửi một hình ảnh',
-                    image: resultStr,
-                    timestamp: timestamp,
-                    isMe: true
+                    content: tcktContent,
+                    images: [resultStr]
                 };
-                
-                const updatedHistory = [...(formData.history || []), newMsg];
-                
-                const newDraft: DraftItem = {
-                    id: `draft-${Date.now()}`,
-                    type: 'image',
-                    content: resultStr,
-                    timestamp: timestamp,
-                    autoDept: currentUserDept
-                };
-                const updatedDrafts = [...(formData.draftQueue || []), newDraft];
+                updatedTCKT = [...updatedTCKT, newTCKT];
+                setChatInput(''); // Clear input if it was used for TCKT tag
+            }
 
-                // TCKT Logic for Image
-                let updatedTCKT = formData.tcktRecords || [];
-                if (isTCKT) {
-                    const tcktContent = chatInput.substring(5).trim() || 'Hình ảnh TCKT';
-                    const newTCKT: TCKTRecord = {
-                        id: `tckt-${Date.now()}`,
-                        timestamp: timestamp,
-                        date: dateKey,
-                        productionOrder: formData.productionOrder || 'N/A',
-                        user: `Nhân viên ${currentUserDept}`,
-                        content: tcktContent,
-                        images: [resultStr]
-                    };
-                    updatedTCKT = [...updatedTCKT, newTCKT];
-                    setChatInput(''); // Clear input if it was used for TCKT tag
-                }
-
-                setFormData(prev => prev ? { ...prev, history: updatedHistory, draftQueue: updatedDrafts, tcktRecords: updatedTCKT } : null);
-                onSave({ ...formData, history: updatedHistory, draftQueue: updatedDrafts, tcktRecords: updatedTCKT });
-                
-                if (isTCKT) alert(`Đã lưu hình ảnh vào TCKT`);
-                else alert(`Đã chuyển ảnh sang tab 'Duyệt' vào bộ phận ${currentUserDept}`);
-             }
-          };
-          reader.readAsDataURL(file);
+            setFormData(prev => prev ? { ...prev, history: updatedHistory, draftQueue: updatedDrafts, tcktRecords: updatedTCKT } : null);
+            onSave({ ...formData, history: updatedHistory, draftQueue: updatedDrafts, tcktRecords: updatedTCKT });
+            
+            if (isTCKT) alert(`Đã lưu hình ảnh vào TCKT`);
+            else alert(`Đã chuyển ảnh sang tab 'Duyệt' vào bộ phận ${currentUserDept}`);
+          }).catch(err => {
+              console.error("Image compression error", err);
+              alert("Lỗi khi xử lý hình ảnh");
+          });
       }
   };
 
@@ -330,6 +383,9 @@ const DocumentDetail: React.FC<DocumentDetailProps> = ({ document, onSave }) => 
 
   return (
     <div className="flex flex-col h-full bg-white relative">
+      {/* Image Viewer */}
+      {viewImage && <ImageViewer src={viewImage} onClose={() => setViewImage(null)} />}
+
       {/* Detail Header / Toolbar */}
       <div className="h-16 border-b border-gray-200 flex items-center justify-between px-6 bg-white sticky top-0 z-10 shadow-sm">
         <div className="flex flex-col min-w-0">
@@ -341,11 +397,33 @@ const DocumentDetail: React.FC<DocumentDetailProps> = ({ document, onSave }) => 
              <h2 className="font-bold text-gray-800 text-lg truncate flex items-center gap-2">
                 <IconBox className="w-5 h-5 text-gray-500" />
                 {formData.title}
+                {formData.spreadsheetUrl && (
+                    <a href={formData.spreadsheetUrl} target="_blank" rel="noreferrer" title="Mở Google Sheet" className="text-green-600 hover:text-green-700">
+                        <IconDatabase className="w-5 h-5" />
+                    </a>
+                )}
              </h2>
         </div>
         
-        {/* Role Simulator Dropdown */}
+        {/* Actions */}
         <div className="flex items-center gap-2">
+             <button 
+                onClick={handleExportToSheet}
+                disabled={isExporting}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition shadow-sm ${isExporting ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
+             >
+                {isExporting ? (
+                    <>
+                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Đang tạo file...
+                    </>
+                ) : (
+                    <>
+                        <IconDatabase className="w-4 h-4" />
+                        Duyệt & Xuất Sheet
+                    </>
+                )}
+             </button>
              <div className="flex items-center bg-gray-100 rounded-lg px-2 py-1 border border-gray-200">
                 <IconUsers className="w-4 h-4 text-gray-500 mr-2" />
                 <span className="text-xs text-gray-500 mr-2 hidden md:inline">Admin View</span>
@@ -464,7 +542,13 @@ const DocumentDetail: React.FC<DocumentDetailProps> = ({ document, onSave }) => 
                                                                                 {images.length > 0 && (
                                                                                     <div className="flex gap-2 flex-wrap">
                                                                                         {images.map((img, i) => (
-                                                                                            <img key={i} src={img} className="w-16 h-16 object-cover rounded border border-gray-200 bg-white shadow-sm" alt="Err" />
+                                                                                            <img 
+                                                                                                key={i} 
+                                                                                                src={img} 
+                                                                                                className="w-16 h-16 object-cover rounded border border-gray-200 bg-white shadow-sm cursor-zoom-in" 
+                                                                                                alt="Err" 
+                                                                                                onClick={() => setViewImage(img)}
+                                                                                            />
                                                                                         ))}
                                                                                     </div>
                                                                                 )}
@@ -527,7 +611,13 @@ const DocumentDetail: React.FC<DocumentDetailProps> = ({ document, onSave }) => 
                                                         {record.images && record.images.length > 0 && (
                                                             <div className="mt-2 flex gap-2 overflow-x-auto">
                                                                 {record.images.map((img, i) => (
-                                                                    <img key={i} src={img} className="h-24 rounded border border-gray-200" alt="tckt" />
+                                                                    <img 
+                                                                        key={i} 
+                                                                        src={img} 
+                                                                        className="h-24 rounded border border-gray-200 cursor-zoom-in" 
+                                                                        alt="tckt" 
+                                                                        onClick={() => setViewImage(img)}
+                                                                    />
                                                                 ))}
                                                             </div>
                                                         )}
@@ -574,7 +664,12 @@ const DocumentDetail: React.FC<DocumentDetailProps> = ({ document, onSave }) => 
                                         <p className="text-sm leading-relaxed whitespace-pre-wrap">{chat.message}</p>
                                         {chat.image && (
                                             <div className="mt-3 relative">
-                                                <img src={chat.image} alt="attachment" className="rounded-lg max-h-48 object-cover border-2 border-white/20" />
+                                                <img 
+                                                    src={chat.image} 
+                                                    alt="attachment" 
+                                                    className="rounded-lg max-h-48 object-cover border-2 border-white/20 cursor-zoom-in" 
+                                                    onClick={() => setViewImage(chat.image!)}
+                                                />
                                             </div>
                                         )}
                                     </div>
@@ -659,9 +754,14 @@ const DocumentDetail: React.FC<DocumentDetailProps> = ({ document, onSave }) => 
                                          {hasDrafts && (
                                              <div className="flex gap-2 overflow-x-auto pb-2 mb-3 no-scrollbar">
                                                  {relevantDrafts.map((d) => (
-                                                     <div key={d.id} className="relative flex-shrink-0 group">
+                                                     <div key={d.id} className="relative flex-shrink-0 group cursor-pointer">
                                                          {d.type === 'image' ? (
-                                                             <img src={d.content} className="h-16 w-16 object-cover rounded border border-gray-200" alt="draft" />
+                                                             <img 
+                                                                src={d.content} 
+                                                                className="h-16 w-16 object-cover rounded border border-gray-200" 
+                                                                alt="draft" 
+                                                                onClick={() => setViewImage(d.content)}
+                                                             />
                                                          ) : (
                                                              <div className="h-16 w-24 bg-gray-100 p-1 text-[10px] overflow-hidden rounded border border-gray-200">
                                                                  {d.content}

@@ -1,13 +1,22 @@
 
-import { DocumentData, DocStatus, DashboardStats, Employee } from '../types';
+import { DocumentData, DocStatus, DashboardStats, Employee, LoginLog } from '../types';
 
 export const mockEmployees: Employee[] = [
-    { id: 'NV001', name: 'Nguyễn Văn A', role: 'Trưởng ca In', dept: 'IN', status: 'Online', avatar: 'https://picsum.photos/40/40?random=1' },
-    { id: 'NV002', name: 'Trần Thị B', role: 'Thủ Kho', dept: 'KHO', status: 'Offline', avatar: 'https://picsum.photos/40/40?random=2' },
-    { id: 'NV003', name: 'Lê Văn C', role: 'Vận hành Sóng', dept: 'SÓNG', status: 'Online', avatar: 'https://picsum.photos/40/40?random=3' },
-    { id: 'NV004', name: 'Phạm Thị D', role: 'KCS Thành phẩm', dept: 'THÀNH PHẨM', status: 'Busy', avatar: 'https://picsum.photos/40/40?random=4' },
-    { id: 'thai', name: 'Admin Manager', role: 'Quản lý SX', dept: 'VĂN PHÒNG', status: 'Online', avatar: 'https://picsum.photos/40/40?random=5', isAdmin: true },
+    { id: 'NV001', name: 'Nguyễn Văn A', password: '123', role: 'Trưởng ca In', dept: 'IN', status: 'Online', avatar: 'https://picsum.photos/40/40?random=1' },
+    { id: 'NV002', name: 'Trần Thị B', password: '123', role: 'Thủ Kho', dept: 'KHO', status: 'Offline', avatar: 'https://picsum.photos/40/40?random=2' },
+    { id: 'NV003', name: 'Lê Văn C', password: '123', role: 'Vận hành Sóng', dept: 'SÓNG', status: 'Online', avatar: 'https://picsum.photos/40/40?random=3' },
+    { id: 'NV004', name: 'Phạm Thị D', password: '123', role: 'KCS Thành phẩm', dept: 'THÀNH PHẨM', status: 'Busy', avatar: 'https://picsum.photos/40/40?random=4' },
+    { id: 'thai', name: 'Admin Manager', password: 'admin', role: 'Quản lý SX', dept: 'VĂN PHÒNG', status: 'Online', avatar: 'https://picsum.photos/40/40?random=5', isAdmin: true },
 ];
+
+export const mockLoginLogs: LoginLog[] = [
+    { id: 'log1', userId: 'thai', userName: 'Admin Manager', timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(), deviceInfo: 'Chrome / Desktop', status: 'Success' },
+    { id: 'log2', userId: 'NV001', userName: 'Nguyễn Văn A', timestamp: new Date(Date.now() - 1000 * 60 * 120).toISOString(), deviceInfo: 'Mobile Safari', status: 'Success' },
+    { id: 'log3', userId: 'NV002', userName: 'Trần Thị B', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(), deviceInfo: 'Mobile Chrome', status: 'Failed' },
+    { id: 'log4', userId: 'NV001', userName: 'Nguyễn Văn A', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), deviceInfo: 'Mobile Safari', status: 'Success' },
+    { id: 'log5', userId: 'thai', userName: 'Admin Manager', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 25).toISOString(), deviceInfo: 'Chrome / Desktop', status: 'Success' },
+];
+
 
 export const mockDocuments: DocumentData[] = [
   // HEINEKEN GROUP

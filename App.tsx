@@ -7,14 +7,23 @@ import Notifications from './components/Notifications';
 import EmployeeManager from './components/EmployeeManager';
 import UserChatInterface from './components/UserChatInterface';
 import Settings from './components/Settings';
-import { Employee, AppSettings } from './types';
-import { mockEmployees } from './services/mockData';
-import { IconUsers, IconBox } from './components/Icons';
+import LoginHistory from './components/LoginHistory';
+import AdminChat from './components/AdminChat';
+import { Employee, AppSettings, LoginLog, DocumentData } from './types';
+import { mockEmployees, mockLoginLogs, mockDocuments } from './services/mockData';
+import { IconUsers, IconBox, IconLock } from './components/Icons';
 
 const App: React.FC = () => {
   // Global Auth State
   const [currentUser, setCurrentUser] = useState<Employee | null>(null);
   const [loginId, setLoginId] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+  
+  // App Data State
+  const [loginLogs, setLoginLogs] = useState<LoginLog[]>(mockLoginLogs);
+  const [documents, setDocuments] = useState<DocumentData[]>(mockDocuments);
+  const [employees, setEmployees] = useState<Employee[]>(mockEmployees);
   
   // App View State
   const [currentView, setCurrentView] = useState('dashboard');
@@ -32,31 +41,90 @@ const App: React.FC = () => {
   // Timer Ref
   const syncTimerRef = useRef<any>(null);
 
+  // --- CHECK LOCAL STORAGE ON MOUNT ---
+  useEffect(() => {
+      const savedUser = localStorage.getItem('codx_user');
+      if (savedUser) {
+          try {
+              const userObj = JSON.parse(savedUser);
+              // Update status to Online immediately on auto-login
+              setEmployees(prev => prev.map(e => e.id === userObj.id ? {...e, status: 'Online'} : e));
+              setCurrentUser(userObj);
+              if(!userObj.isAdmin) setCurrentView('chat-user');
+          } catch(e) {
+              localStorage.removeItem('codx_user');
+          }
+      }
+  }, []);
+
   // --- LOGIN LOGIC ---
   const handleLogin = () => {
-      if (!loginId.trim()) {
-          alert("Vui lòng nhập Mã Nhân Viên");
+      if (!loginId.trim() || !loginPassword.trim()) {
+          alert("Vui lòng nhập đầy đủ Mã Nhân Viên và Mật khẩu");
           return;
       }
       
-      const foundUser = mockEmployees.find(e => e.id.toLowerCase() === loginId.trim().toLowerCase());
+      const foundUser = employees.find(e => e.id.toLowerCase() === loginId.trim().toLowerCase());
+      
       if (foundUser) {
-          setCurrentUser(foundUser);
-          // Redirect based on role
-          if (!foundUser.isAdmin) {
-              setCurrentView('chat-user');
+          if (foundUser.password === loginPassword) {
+            // Success
+            const loggedInUser = {...foundUser, status: 'Online' as const};
+            setCurrentUser(loggedInUser);
+            
+            // Update Global Employee List Status
+            setEmployees(prev => prev.map(e => e.id === foundUser.id ? {...e, status: 'Online'} : e));
+            
+            // Log History
+            const newLog: LoginLog = {
+                id: `log-${Date.now()}`,
+                userId: foundUser.id,
+                userName: foundUser.name,
+                timestamp: new Date().toISOString(),
+                deviceInfo: navigator.userAgent.includes('Mobile') ? 'Mobile Browser' : 'Desktop Browser',
+                status: 'Success'
+            };
+            setLoginLogs(prev => [newLog, ...prev]);
+
+            // Handle Remember Me
+            if (rememberMe) {
+                localStorage.setItem('codx_user', JSON.stringify(loggedInUser));
+            } else {
+                localStorage.removeItem('codx_user');
+            }
+
+            // Redirect based on role
+            if (!foundUser.isAdmin) {
+                setCurrentView('chat-user');
+            } else {
+                setCurrentView('dashboard');
+            }
           } else {
-              setCurrentView('dashboard');
+             alert("Mật khẩu không đúng!");
           }
       } else {
-          alert("Mã nhân viên không tồn tại (Thử 'thai' cho Admin, 'NV001' cho NV)");
+          alert("Mã nhân viên không tồn tại (Thử 'thai' / 'admin', 'NV001' / '123')");
       }
   };
 
   const handleLogout = () => {
+      if(currentUser) {
+          // Update status to offline
+          setEmployees(prev => prev.map(e => e.id === currentUser.id ? {...e, status: 'Offline'} : e));
+      }
       setCurrentUser(null);
       setLoginId('');
+      setLoginPassword('');
+      setRememberMe(false);
+      localStorage.removeItem('codx_user');
       setCurrentView('dashboard');
+  };
+
+  // Function to save document changes (passed to children)
+  const handleSaveDocument = (updatedDoc: DocumentData) => {
+      setDocuments(prev => prev.map(d => d.id === updatedDoc.id ? updatedDoc : d));
+      // Call Google Script if needed
+      // google.script.run.saveDocumentData(updatedDoc);
   };
 
   // --- BACKUP & SYNC LOGIC ---
@@ -82,23 +150,8 @@ const App: React.FC = () => {
   const performPeriodicSync = () => {
       const now = new Date().toLocaleTimeString();
       console.log(`[System] Auto-syncing to Google Sheets at ${now}...`);
-      
-      // In a real app, you might batch-save pending changes here.
-      // Since our saveDocumentData saves instantly, this serves as a redundancy check or full refresh.
-      
       setSettings(prev => ({ ...prev, lastSyncTime: now }));
   };
-
-  // 3. Local Backup Logic (Mock)
-  useEffect(() => {
-      if (settings.enableLocalBackup) {
-          // In a real browser environment, we would save to localStorage here
-          // whenever data changes. For now, we simulate the "Backup Parallel"
-          // concept by logging readiness.
-          // localStorage.setItem('codx_backup', JSON.stringify(appData));
-      }
-  }, [settings.enableLocalBackup]);
-
 
   // --- VIEW RENDERING ---
   
@@ -116,20 +169,51 @@ const App: React.FC = () => {
                     <div className="space-y-4 text-left">
                         <div>
                             <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Mã Nhân Viên</label>
-                            <input 
-                                type="text" 
-                                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-lg font-bold text-center tracking-widest focus:ring-2 focus:ring-blue-500 focus:outline-none uppercase"
-                                placeholder="VD: NV001"
-                                value={loginId}
-                                onChange={(e) => setLoginId(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                            />
+                            <div className="relative">
+                                <IconUsers className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                                <input 
+                                    type="text" 
+                                    className="w-full border border-gray-300 rounded-xl pl-10 pr-4 py-3 text-lg font-bold tracking-widest focus:ring-2 focus:ring-blue-500 focus:outline-none uppercase text-gray-700"
+                                    placeholder="VD: NV001"
+                                    value={loginId}
+                                    onChange={(e) => setLoginId(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && document.getElementById('pass-input')?.focus()}
+                                />
+                            </div>
                         </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Mật khẩu</label>
+                            <div className="relative">
+                                <IconLock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                                <input 
+                                    id="pass-input"
+                                    type="password" 
+                                    className="w-full border border-gray-300 rounded-xl pl-10 pr-4 py-3 text-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-700"
+                                    placeholder="••••••"
+                                    value={loginPassword}
+                                    onChange={(e) => setLoginPassword(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex items-center">
+                            <input 
+                                id="remember-me" 
+                                type="checkbox" 
+                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                checked={rememberMe}
+                                onChange={(e) => setRememberMe(e.target.checked)}
+                            />
+                            <label htmlFor="remember-me" className="ml-2 text-sm font-medium text-gray-900 select-none cursor-pointer">Ghi nhớ đăng nhập</label>
+                        </div>
+                        
                         <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-xs text-blue-700">
                             <p className="font-bold mb-1">Gợi ý đăng nhập (Demo):</p>
                             <ul className="list-disc list-inside">
-                                <li>NV001 - Công nhân (Vào Chat)</li>
-                                <li>thai - Quản lý (Vào Admin)</li>
+                                <li>NV001 / 123 (Công nhân)</li>
+                                <li>thai / admin (Quản lý)</li>
                             </ul>
                         </div>
                     </div>
@@ -145,19 +229,44 @@ const App: React.FC = () => {
       );
   }
 
-  // 2. EMPLOYEE VIEW (Chat Interface ONLY)
+  // 2. EMPLOYEE VIEW
   if (!currentUser.isAdmin) {
+      if (currentView === 'history') {
+          return (
+             <div className="h-screen w-screen bg-gray-100 relative flex flex-col">
+                  <div className="bg-[#0060B6] p-4 text-white flex justify-between items-center shadow-md">
+                      <button onClick={() => setCurrentView('chat-user')} className="flex items-center gap-1 font-bold text-sm">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                          Quay lại
+                      </button>
+                      <span className="font-bold">Lịch sử của tôi</span>
+                      <div className="w-16"></div>
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                      <LoginHistory currentUser={currentUser} logs={loginLogs} />
+                  </div>
+             </div>
+          )
+      }
+
       return (
           <div className="h-screen w-screen bg-gray-100 overflow-hidden relative">
               <UserChatInterface 
                   user={currentUser} 
                   onLogout={handleLogout} 
               />
+              <button 
+                onClick={() => setCurrentView('history')}
+                className="absolute bottom-4 left-4 bg-white p-3 rounded-full shadow-lg border border-gray-200 text-gray-600 z-50 hover:text-blue-600"
+                title="Xem lịch sử đăng nhập"
+              >
+                  <IconBox className="w-6 h-6" />
+              </button>
           </div>
       );
   }
 
-  // 3. ADMIN VIEW (Dashboard + Sidebar)
+  // 3. ADMIN VIEW
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-gray-100 relative">
       
@@ -192,8 +301,17 @@ const App: React.FC = () => {
                 <Notifications />
             ) : currentView === 'employees' ? (
                 <EmployeeManager />
+            ) : currentView === 'history' ? (
+                <LoginHistory currentUser={currentUser} logs={loginLogs} />
             ) : currentView === 'settings' ? (
                 <Settings settings={settings} onSaveSettings={setSettings} />
+            ) : currentView === 'admin-chat' ? (
+                <AdminChat 
+                    currentUser={currentUser} 
+                    employees={employees} 
+                    documents={documents}
+                    onSaveDocument={handleSaveDocument}
+                />
             ) : currentView === 'chat-user' ? (
                 <div className="h-full w-full flex items-center justify-center bg-gray-200 p-4">
                     <div className="w-full max-w-md h-full rounded-2xl overflow-hidden shadow-2xl bg-white border border-gray-300">
