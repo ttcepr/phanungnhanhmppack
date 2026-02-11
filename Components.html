@@ -1,0 +1,175 @@
+<script type="text/babel">
+  const { useState, useEffect, useRef, useMemo } = React;
+  const { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend } = Recharts;
+
+  // 1. ImageViewer
+  const ImageViewer = ({ src, onClose }) => {
+      const [scale, setScale] = useState(1);
+      const [dragging, setDragging] = useState(false);
+      const [position, setPosition] = useState({ x: 0, y: 0 });
+      const [startPos, setStartPos] = useState({ x: 0, y: 0 });
+
+      const handleZoomIn = () => setScale(prev => Math.min(prev + 0.5, 4));
+      const handleZoomOut = () => setScale(prev => Math.max(prev - 0.5, 1));
+      const handleMouseDown = (e) => {
+          if (scale > 1) { setDragging(true); setStartPos({ x: e.clientX - position.x, y: e.clientY - position.y }); }
+      };
+      const handleMouseMove = (e) => {
+          if (dragging && scale > 1) { setPosition({ x: e.clientX - startPos.x, y: e.clientY - startPos.y }); }
+      };
+      const handleMouseUp = () => setDragging(false);
+
+      return (
+          <div className="fixed inset-0 z-[100] bg-black/90 flex flex-col">
+              <div className="h-14 flex items-center justify-between px-4 bg-black/50 backdrop-blur-sm z-10">
+                  <div className="text-white text-sm font-medium opacity-80">Trình xem ảnh ({Math.round(scale * 100)}%)</div>
+                  <div className="flex gap-4">
+                       <button onClick={handleZoomOut} className="text-white/70 hover:text-white p-2 bg-white/10 rounded-full"><IconZoomOut className="w-5 h-5" /></button>
+                       <button onClick={handleZoomIn} className="text-white/70 hover:text-white p-2 bg-white/10 rounded-full"><IconZoomIn className="w-5 h-5" /></button>
+                       <button onClick={onClose} className="text-white hover:text-red-400 p-2 bg-white/10 rounded-full ml-4"><IconX className="w-5 h-5" /></button>
+                  </div>
+              </div>
+              <div className="flex-1 overflow-hidden flex items-center justify-center cursor-move" onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
+                  <img src={src} alt="Preview" className="max-w-full max-h-full object-contain transition-transform duration-200 ease-out" style={{ transform: `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`, cursor: scale > 1 ? (dragging ? 'grabbing' : 'grab') : 'default' }} draggable={false} />
+              </div>
+          </div>
+      );
+  };
+
+  // 2. StatCard
+  const StatCard = ({ title, count, subtitle, icon, colorClass, trend }) => (
+    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-start justify-between hover:shadow-md transition-shadow">
+      <div>
+          <h3 className="text-sm font-medium text-gray-500 mb-1">{title}</h3>
+          <div className="flex items-baseline gap-2">
+              <span className={`text-3xl font-bold ${colorClass}`}>{count}</span>
+              {trend && <span className="text-xs text-green-500 font-medium">{trend}</span>}
+          </div>
+          {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+      </div>
+      <div className={`p-3 rounded-xl ${colorClass.replace('text-', 'bg-').replace('600', '50').replace('500', '50')}`}>
+          {icon}
+      </div>
+    </div>
+  );
+
+  // 3. Dashboard
+  const Dashboard = () => {
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+    const dataLine = [
+      { name: 'T2', hoSo: 120 }, { name: 'T3', hoSo: 135 }, { name: 'T4', hoSo: 110 },
+      { name: 'T5', hoSo: 155 }, { name: 'T6', hoSo: 140 }, { name: 'T7', hoSo: 180 }, { name: 'CN', hoSo: 95 }
+    ];
+
+    const handleExportPdf = () => {
+        setIsGeneratingPdf(true);
+        if(typeof google !== 'undefined' && google.script) {
+            google.script.run.withSuccessHandler((response) => {
+                setIsGeneratingPdf(false);
+                if(response.success) window.open(response.url, '_blank');
+                else alert('Lỗi: ' + response.error);
+            }).createExecutiveReport();
+        } else {
+            setTimeout(() => { setIsGeneratingPdf(false); alert("Mô phỏng PDF thành công (Local)"); }, 1500);
+        }
+    };
+
+    return (
+      <div className="flex flex-col h-full bg-slate-50 p-6 overflow-y-auto no-scrollbar pb-20 fade-in">
+        <div className="flex justify-between items-end mb-8">
+          <div><h1 className="text-2xl font-bold text-gray-800">Tổng quan Hệ thống</h1></div>
+          <button onClick={handleExportPdf} disabled={isGeneratingPdf} className={`bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-sm ${isGeneratingPdf ? 'opacity-50' : ''}`}>
+              {isGeneratingPdf ? 'Đang tạo PDF...' : <><IconPrinter className="w-4 h-4 text-gray-600" /> Xuất Báo cáo PDF</>}
+          </button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <StatCard title="Tổng số Hồ sơ" count={dashboardStats.totalRecords} colorClass="text-blue-600" icon={<IconDocument className="w-6 h-6 text-blue-600" />} />
+          <StatCard title="Hồ sơ Mới" count={dashboardStats.newRecords} trend="+5" colorClass="text-indigo-600" icon={<IconPlus className="w-6 h-6 text-indigo-600" />} />
+          <StatCard title="Cảnh báo / Lỗi" count={7} colorClass="text-red-500" icon={<IconAlert className="w-6 h-6 text-red-500" />} />
+          <StatCard title="Chờ phê duyệt" count={dashboardStats.pending} colorClass="text-orange-500" icon={<IconCheckCircle className="w-6 h-6 text-orange-500" />} />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+              <h3 className="font-bold text-gray-800 mb-6">Lưu lượng xử lý (Bộ phận Sản xuất)</h3>
+              <div className="h-72"><ResponsiveContainer width="100%" height="100%"><LineChart data={dataLine}><XAxis dataKey="name"/><YAxis/><Tooltip/><Line type="monotone" dataKey="hoSo" stroke="#2563EB" strokeWidth={3} dot={{r: 4}}/></LineChart></ResponsiveContainer></div>
+          </div>
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
+               <h3 className="font-bold text-gray-800 mb-6">Trạng thái Phê duyệt</h3>
+               <div className="flex-1 min-h-[250px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={dashboardStats.approvalStats} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">{dashboardStats.approvalStats.map((entry, index) => <Cell key={index} fill={entry.color} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer></div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // 4. Notifications
+  const Notifications = () => {
+    const pendingDocs = mockDocuments.filter(doc => doc.status === DocStatus.WAITING || doc.status === DocStatus.URGENT);
+    return (
+        <div className="flex flex-col h-full bg-gray-50 p-6 overflow-y-auto fade-in">
+            <div className="mb-8 flex items-center gap-3">
+                <div className="bg-red-100 p-3 rounded-xl text-red-600"><IconBell className="w-8 h-8" /></div>
+                <div><h1 className="text-2xl font-bold text-gray-800">Thông báo</h1><p className="text-sm text-gray-500">Hồ sơ chờ xử lý</p></div>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                {pendingDocs.map(doc => (
+                    <div key={doc.id} className="p-5 border-b flex items-start gap-4 hover:bg-gray-50">
+                        <div className="mt-1 text-yellow-500"><IconAlert className="w-5 h-5"/></div>
+                        <div>
+                            <h3 className="font-bold text-gray-800">{doc.title}</h3>
+                            <p className="text-sm text-gray-500">{doc.clientName} - {doc.status}</p>
+                        </div>
+                    </div>
+                ))}
+                {pendingDocs.length === 0 && <div className="p-8 text-center text-gray-400">Không có thông báo mới</div>}
+            </div>
+        </div>
+    );
+  };
+
+  // 5. EmployeeManager
+  const EmployeeManager = () => {
+      return (
+        <div className="flex flex-col h-full bg-gray-50 p-6 overflow-y-auto fade-in">
+            <div className="mb-8 flex justify-between items-end">
+                <div><h1 className="text-2xl font-bold text-gray-800">Nhân viên</h1></div>
+                <button className="bg-blue-600 text-white px-4 py-2 rounded-lg flex gap-2"><IconPlus className="w-4 h-4"/> Thêm</button>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+                <table className="w-full text-left">
+                    <thead className="bg-gray-50 text-xs font-bold text-gray-500 uppercase"><tr><th className="p-4">Tên</th><th className="p-4">Bộ phận</th><th className="p-4">Trạng thái</th></tr></thead>
+                    <tbody>
+                        {mockEmployees.map(emp => (
+                            <tr key={emp.id} className="border-b hover:bg-gray-50">
+                                <td className="p-4 flex items-center gap-3"><img src={emp.avatar} className="w-8 h-8 rounded-full"/> <span className="font-bold">{emp.name}</span></td>
+                                <td className="p-4 text-sm">{emp.dept}</td>
+                                <td className="p-4"><span className={`px-2 py-1 rounded text-xs font-bold ${emp.status==='Online'?'bg-green-100 text-green-700':'bg-gray-100'}`}>{emp.status}</span></td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+      );
+  };
+
+  // 6. Settings
+  const Settings = () => {
+      return (
+          <div className="p-6 bg-gray-50 h-full fade-in">
+              <h1 className="text-2xl font-bold text-gray-800 mb-6">Thiết lập</h1>
+              <div className="bg-white p-6 rounded-xl border border-gray-200 max-w-2xl">
+                  <div className="flex items-center justify-between mb-4">
+                      <span className="font-bold">Chế độ tối</span>
+                      <input type="checkbox" className="toggle"/>
+                  </div>
+                  <div className="flex items-center justify-between mb-4">
+                      <span className="font-bold">Đồng bộ Google Sheet</span>
+                      <span className="text-green-600 text-sm font-bold">Đang bật (30p/lần)</span>
+                  </div>
+                  <button className="bg-blue-600 text-white px-4 py-2 rounded-lg mt-4 w-full">Lưu thay đổi</button>
+              </div>
+          </div>
+      )
+  }
+</script>

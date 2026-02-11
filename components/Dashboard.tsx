@@ -65,7 +65,7 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 p-6 overflow-y-auto no-scrollbar pb-20">
+    <div className="flex flex-col h-full bg-slate-50 p-6 overflow-y-auto no-scrollbar pb-20 fade-in">
       {/* Header */}
       <div className="flex justify-between items-end mb-8">
         <div>
@@ -145,7 +145,6 @@ const Dashboard: React.FC = () => {
                     <YAxis axisLine={false} tickLine={false} tick={{fill: '#9CA3AF', fontSize: 12}} />
                     <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'}} />
                     <Line type="monotone" dataKey="hoSo" name="Số lượng Hồ sơ" stroke="#2563EB" strokeWidth={3} dot={{r: 4}} activeDot={{r: 6}} />
-                    <Legend iconType="circle" />
                 </LineChart>
                 </ResponsiveContainer>
             </div>
