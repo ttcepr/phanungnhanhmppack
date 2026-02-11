@@ -68,6 +68,12 @@ export const dashboardStats: DashboardStats = {
   totalRecords: 1540,
   newRecords: 12,
   pending: 45,
+  waiting: 18,
+  overdue: 5,
+  urgent: 8,
+  incoming: 25,
+  outgoing: 30,
+  internal: 15,
   errorStats: [
     { name: 'T2', errors: 1, warnings: 2 },
     { name: 'T3', errors: 0, warnings: 4 },

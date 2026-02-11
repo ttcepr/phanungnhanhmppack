@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { DocumentData, ChatMessage, DeptType, DocStatus } from '../types';
-import { IconSend, IconImage, IconTransfer, IconBox, IconWave, IconInk, IconScissor, IconWarehouse, IconDatabase, IconCalendar } from './Icons';
+import { DocumentData, ChatMessage, SavedRecord, DeptType, ProductionError, DraftItem, TCKTRecord, DocStatus } from '../types';
+import { IconSave, IconSend, IconUpload, IconCheck, IconImage, IconTransfer, IconBox, IconWave, IconInk, IconScissor, IconWarehouse, IconPlus, IconSettings, IconUsers, IconCalendar, IconDatabase } from './Icons';
 import { compressImage } from '../utils/helpers';
 import ImageViewer from './ImageViewer';
 
@@ -10,39 +11,334 @@ interface DocumentDetailProps {
 }
 
 const tabs = ['Tổng quan', 'TCKT', 'Chát online', 'Duyệt'];
+
+// Dept options
 const deptOptions: DeptType[] = ['SÓNG', 'IN', 'THÀNH PHẨM', 'KHO'];
+
+// Type for storing form data per department
+type DeptReviewData = {
+    content: string;
+    solution: string;
+}
 
 const DocumentDetail: React.FC<DocumentDetailProps> = ({ document, onSave }) => {
   const [activeTab, setActiveTab] = useState('Tổng quan');
   const [formData, setFormData] = useState<DocumentData | null>(null);
+  
+  // Simulated Current User Role
+  const [currentUserDept, setCurrentUserDept] = useState<DeptType>('IN');
+
   const [chatInput, setChatInput] = useState('');
-  const [viewImage, setViewImage] = useState<string | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Review/Approval Form States - Now Per Department
+  const [deptForms, setDeptForms] = useState<Record<DeptType, DeptReviewData>>({
+      'SÓNG': { content: '', solution: '' },
+      'IN': { content: '', solution: '' },
+      'THÀNH PHẨM': { content: '', solution: '' },
+      'KHO': { content: '', solution: '' }
+  });
+  
+  // Editing State
+  const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
+  
+  // Image Viewer State
+  const [viewImage, setViewImage] = useState<string | null>(null);
+  
+  // Export State
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     if (document) {
       setFormData({ ...document });
+      // Reset form states
+      setDeptForms({
+          'SÓNG': { content: '', solution: '' },
+          'IN': { content: '', solution: '' },
+          'THÀNH PHẨM': { content: '', solution: '' },
+          'KHO': { content: '', solution: '' }
+      });
+      setEditingRecordId(null);
       setActiveTab('Tổng quan');
     }
   }, [document]);
 
-  if (!formData) return <div className="flex flex-col h-full items-center justify-center text-gray-400">Chọn hồ sơ để xem chi tiết</div>;
+  if (!formData) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center bg-gray-50 text-gray-400">
+        <IconBox className="w-20 h-20 mb-4 opacity-20" />
+        <p className="font-medium text-lg">Chọn một Hồ sơ Nhãn hàng để xem chi tiết</p>
+        <p className="text-sm">Danh sách khách hàng ở cột bên trái</p>
+      </div>
+    );
+  }
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => prev ? { ...prev, [name]: value } : null);
+  };
+  
+  // --- EXPORT TO SHEET LOGIC ---
+  const handleExportToSheet = () => {
+      if (!formData) return;
+      
+      const confirmMsg = "Bạn có chắc chắn muốn duyệt và tạo hồ sơ Google Sheet không?\nHệ thống sẽ tạo 1 file riêng và upload toàn bộ hình ảnh lên đó.";
+      if (!confirm(confirmMsg)) return;
+
+      setIsExporting(true);
+      
+      // Update status locally first
+      const updatedDoc = {
+          ...formData,
+          status: DocStatus.APPROVED
+      };
+      setFormData(updatedDoc);
+      
+      // Môi trường Vercel / Demo: Luôn chạy Simulation
+      setTimeout(() => {
+          setIsExporting(false);
+          const mockUrl = "https://docs.google.com/spreadsheets/u/0/";
+          const finalDoc = { ...updatedDoc, spreadsheetUrl: mockUrl };
+          setFormData(finalDoc);
+          onSave(finalDoc);
+          alert("MÔ PHỎNG (Vercel Mode): Đã tạo file Google Sheet thành công!\n(Đã cập nhật link giả lập vào hồ sơ)");
+          window.open(mockUrl, '_blank');
+      }, 1500);
+  };
+
+  // --- CHAT LOGIC ---
   const handleSendChat = () => {
-      if(!chatInput.trim()) return;
-      const newMsg: ChatMessage = { id: Date.now().toString(), user: 'Admin', avatar: '', message: chatInput, timestamp: new Date().toLocaleTimeString(), isMe: true };
-      const updatedHistory = [...(formData.history || []), newMsg];
-      setFormData(prev => prev ? {...prev, history: updatedHistory} : null);
+      if(!chatInput.trim() || !formData.history) return;
+      
+      const now = new Date();
+      const timestamp = `${now.toLocaleDateString('en-GB')} ${now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+      const dateKey = now.toISOString().split('T')[0];
+      const isTCKT = chatInput.toUpperCase().startsWith('TCKT:');
+
+      const newMsg: ChatMessage = {
+          id: Date.now().toString(),
+          user: `Nhân viên ${currentUserDept}`,
+          avatar: 'https://picsum.photos/40/40?random=99',
+          message: chatInput,
+          timestamp: timestamp,
+          isMe: true
+      };
+      
+      const updatedHistory = [...formData.history, newMsg];
+      
+      // Auto transfer to Persistent Draft Queue
+      const newDraft: DraftItem = {
+          id: `draft-${Date.now()}`,
+          type: 'text',
+          content: chatInput,
+          timestamp: timestamp,
+          autoDept: currentUserDept
+      };
+      const updatedDrafts = [...(formData.draftQueue || []), newDraft];
+
+      // Logic TCKT: If text starts with TCKT:
+      let updatedTCKT = formData.tcktRecords || [];
+      if (isTCKT) {
+          const tcktContent = chatInput.substring(5).trim();
+          const newTCKT: TCKTRecord = {
+              id: `tckt-${Date.now()}`,
+              timestamp: timestamp,
+              date: dateKey,
+              productionOrder: formData.productionOrder || 'N/A',
+              user: `Nhân viên ${currentUserDept}`,
+              content: tcktContent,
+              images: []
+          };
+          updatedTCKT = [...updatedTCKT, newTCKT];
+      }
+
+      setFormData(prev => prev ? { ...prev, history: updatedHistory, draftQueue: updatedDrafts, tcktRecords: updatedTCKT } : null);
+      onSave({ ...formData, history: updatedHistory, draftQueue: updatedDrafts, tcktRecords: updatedTCKT });
+      
+      if(isTCKT) alert("Đã lưu vào Tiêu Chuẩn Kỹ Thuật (TCKT)");
       setChatInput('');
   };
 
-  const handleExportToSheet = () => {
-      setIsExporting(true);
-      setTimeout(() => {
-          setIsExporting(false);
-          alert("MÔ PHỎNG: Xuất file Google Sheet thành công!");
-      }, 1500);
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0] && formData.history) {
+          const file = e.target.files[0];
+          const isTCKT = chatInput.toUpperCase().startsWith('TCKT:'); // Check input box for TCKT tag
+
+          compressImage(file).then(resultStr => {
+             const now = new Date();
+             const timestamp = `${now.toLocaleDateString('en-GB')} ${now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+             const dateKey = now.toISOString().split('T')[0];
+
+             const newMsg: ChatMessage = {
+                id: Date.now().toString(),
+                user: `Nhân viên ${currentUserDept}`,
+                avatar: 'https://picsum.photos/40/40?random=99',
+                message: isTCKT ? `TCKT Image: ${chatInput}` : 'Đã gửi một hình ảnh',
+                image: resultStr,
+                timestamp: timestamp,
+                isMe: true
+            };
+            
+            const updatedHistory = [...(formData.history || []), newMsg];
+            
+            const newDraft: DraftItem = {
+                id: `draft-${Date.now()}`,
+                type: 'image',
+                content: resultStr,
+                timestamp: timestamp,
+                autoDept: currentUserDept
+            };
+            const updatedDrafts = [...(formData.draftQueue || []), newDraft];
+
+            // TCKT Logic for Image
+            let updatedTCKT = formData.tcktRecords || [];
+            if (isTCKT) {
+                const tcktContent = chatInput.substring(5).trim() || 'Hình ảnh TCKT';
+                const newTCKT: TCKTRecord = {
+                    id: `tckt-${Date.now()}`,
+                    timestamp: timestamp,
+                    date: dateKey,
+                    productionOrder: formData.productionOrder || 'N/A',
+                    user: `Nhân viên ${currentUserDept}`,
+                    content: tcktContent,
+                    images: [resultStr]
+                };
+                updatedTCKT = [...updatedTCKT, newTCKT];
+                setChatInput(''); // Clear input if it was used for TCKT tag
+            }
+
+            setFormData(prev => prev ? { ...prev, history: updatedHistory, draftQueue: updatedDrafts, tcktRecords: updatedTCKT } : null);
+            onSave({ ...formData, history: updatedHistory, draftQueue: updatedDrafts, tcktRecords: updatedTCKT });
+            
+            if (isTCKT) alert(`Đã lưu hình ảnh vào TCKT`);
+            else alert(`Đã chuyển ảnh sang tab 'Duyệt' vào bộ phận ${currentUserDept}`);
+          }).catch(err => {
+              console.error("Image compression error", err);
+              alert("Lỗi khi xử lý hình ảnh");
+          });
+      }
+  };
+
+  // --- REVIEW TAB LOGIC ---
+  const updateDeptForm = (dept: DeptType, field: keyof DeptReviewData, value: string) => {
+      setDeptForms(prev => ({
+          ...prev,
+          [dept]: { ...prev[dept], [field]: value }
+      }));
+  };
+
+  const handleSaveDept = (dept: DeptType) => {
+      if (!formData) return;
+      
+      const form = deptForms[dept];
+      const todayStr = new Date().toLocaleDateString('en-GB'); 
+      const currentPO = formData.productionOrder || 'N/A';
+
+      const relevantDrafts = (formData.draftQueue || []).filter(d => d.autoDept === dept);
+      const images = relevantDrafts.filter(d => d.type === 'image').map(d => d.content);
+      const textDrafts = relevantDrafts.filter(d => d.type === 'text').map(d => d.content).join('\n');
+      
+      const finalContent = form.content || textDrafts || `Ghi nhận tại bộ phận ${dept}`;
+
+      if (!finalContent && images.length === 0 && !form.solution) {
+          alert(`Vui lòng nhập nội dung hoặc có hình ảnh cho bộ phận ${dept}`);
+          return;
+      }
+
+      const record: SavedRecord = {
+          id: `REC-${dept}-${Date.now()}`,
+          timestamp: todayStr, 
+          productionOrder: currentPO, 
+          source: 'Chat',
+          dept: dept,
+          content: finalContent,
+          solution: form.solution,
+          images: images
+      };
+
+      const errorLog: ProductionError = {
+          id: `ERR-${dept}-${Date.now()}`,
+          date: todayStr,
+          productionOrder: currentPO,
+          dept: dept,
+          errorContent: finalContent,
+          solution: form.solution
+      };
+      
+      const updatedSavedRecords = [record, ...(formData.savedRecords || [])];
+      const updatedErrorLogs = [...(formData.errorLog || []), errorLog];
+      
+      const usedDraftIds = relevantDrafts.map(d => d.id);
+      const remainingDrafts = (formData.draftQueue || []).filter(d => !usedDraftIds.includes(d.id));
+
+      setFormData({
+          ...formData,
+          savedRecords: updatedSavedRecords,
+          errorLog: updatedErrorLogs,
+          draftQueue: remainingDrafts
+      });
+      
+      setDeptForms(prev => ({
+          ...prev,
+          [dept]: { content: '', solution: '' }
+      }));
+      
+      onSave({...formData, savedRecords: updatedSavedRecords, errorLog: updatedErrorLogs, draftQueue: remainingDrafts});
+      alert(`Đã lưu cho ${dept} (Phiếu: ${currentPO})!`);
+  };
+
+  // --- OVERVIEW TAB LOGIC ---
+  const getGroupedRecords = () => {
+      const groups: Record<string, Record<string, { saved?: SavedRecord, error?: ProductionError }[]>> = {};
+      
+      const processItem = (date: string, po: string, type: 'saved' | 'error', item: any) => {
+          if (!groups[date]) groups[date] = {};
+          if (!groups[date][po]) groups[date][po] = [];
+      };
+
+      formData?.savedRecords?.forEach(r => {
+          const date = r.timestamp.split(' ')[0];
+          const po = r.productionOrder || 'N/A';
+          processItem(date, po, 'saved', r);
+      });
+
+      formData?.errorLog?.forEach(e => {
+          const po = e.productionOrder || formData.productionOrder || 'N/A'; 
+          processItem(e.date, po, 'error', e);
+      });
+
+      if (Object.keys(groups).length === 0) {
+          const today = new Date().toLocaleDateString('en-GB');
+          groups[today] = { [formData?.productionOrder || 'N/A']: [] };
+      }
+
+      return Object.entries(groups)
+        .sort((a, b) => b[0].localeCompare(a[0])) 
+        .map(([date, poMap]) => ({
+            date,
+            pos: Object.keys(poMap).sort()
+        }));
+  };
+
+  // --- TCKT GROUPING LOGIC ---
+  const getGroupedTCKT = () => {
+      const records = formData.tcktRecords || [];
+      const grouped: Record<string, Record<string, TCKTRecord[]>> = {};
+
+      records.forEach(rec => {
+          const date = rec.date; // YYYY-MM-DD
+          const po = rec.productionOrder || 'N/A';
+          if (!grouped[date]) grouped[date] = {};
+          if (!grouped[date][po]) grouped[date][po] = [];
+          grouped[date][po].push(rec);
+      });
+
+      return Object.entries(grouped)
+          .sort((a, b) => b[0].localeCompare(a[0]))
+          .map(([date, poMap]) => ({
+              date,
+              pos: Object.entries(poMap).map(([po, items]) => ({ po, items }))
+          }));
   };
 
   const renderDeptIcon = (dept: DeptType) => {
@@ -54,17 +350,31 @@ const DocumentDetail: React.FC<DocumentDetailProps> = ({ document, onSave }) => 
       }
   }
 
+  const getDeptColor = (dept: DeptType) => {
+       switch(dept) {
+          case 'SÓNG': return 'text-orange-700 bg-orange-50 border-orange-200';
+          case 'IN': return 'text-cyan-700 bg-cyan-50 border-cyan-200';
+          case 'THÀNH PHẨM': return 'text-purple-700 bg-purple-50 border-purple-200';
+          case 'KHO': return 'text-green-700 bg-green-50 border-green-200';
+      }
+  }
+
+  const groupedData = getGroupedRecords();
+  const tcktData = getGroupedTCKT();
+
   return (
     <div className="flex flex-col h-full bg-white relative w-full overflow-hidden fade-in">
       {viewImage && <ImageViewer src={viewImage} onClose={() => setViewImage(null)} />}
       
-      {/* Header */}
+      {/* Detail Header */}
       <div className="h-16 border-b border-gray-200 flex items-center justify-between px-6 bg-white sticky top-0 z-10 shadow-sm flex-shrink-0">
           <div>
               <h2 className="font-bold text-gray-800 text-lg flex items-center gap-2 truncate">{formData.title}</h2>
-              <div className="text-xs text-gray-500 flex gap-2"><span>{formData.clientName}</span> | <span>{formData.brandName}</span></div>
+              <div className="text-xs text-gray-500 flex gap-2">
+                  <span>{formData.clientName}</span> | <span>{formData.brandName}</span>
+              </div>
           </div>
-          <button onClick={handleExportToSheet} disabled={isExporting} className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-green-700 transition">
+          <button onClick={handleExportToSheet} disabled={isExporting} className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 flex-shrink-0 hover:bg-green-700 transition">
               {isExporting ? 'Đang tạo...' : <><IconDatabase className="w-4 h-4"/> Xuất Sheet</>}
           </button>
       </div>
@@ -83,12 +393,108 @@ const DocumentDetail: React.FC<DocumentDetailProps> = ({ document, onSave }) => 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div><label className="text-xs font-bold text-gray-500 block mb-1">Mã SP</label><input type="text" readOnly value={formData.docNumber} className="w-full bg-gray-100 border rounded p-2 text-sm"/></div>
                       <div><label className="text-xs font-bold text-gray-500 block mb-1">Tên SP</label><input type="text" readOnly value={formData.title} className="w-full bg-gray-100 border rounded p-2 text-sm"/></div>
-                      <div><label className="text-xs font-bold text-blue-600 block mb-1">Phiếu SX</label><input type="text" value={formData.productionOrder || ''} onChange={(e) => setFormData(prev => prev ? {...prev, productionOrder: e.target.value} : null)} className="w-full border border-blue-300 rounded p-2 text-sm font-bold"/></div>
+                      <div><label className="text-xs font-bold text-blue-600 block mb-1">Phiếu SX</label><input type="text" value={formData.productionOrder || ''} onChange={(e) => setFormData({...formData, productionOrder: e.target.value})} className="w-full border border-blue-300 rounded p-2 text-sm font-bold"/></div>
                   </div>
                   <div className="mt-6 border-t pt-4">
                       <h3 className="font-bold text-gray-800 mb-2">Thông số kỹ thuật</h3>
                       <pre className="bg-gray-50 p-4 rounded text-xs overflow-auto">{JSON.stringify(formData.specs, null, 2)}</pre>
                   </div>
+                  
+                  {/* Error Logs Table */}
+                   <div className="mt-8">
+                      <h3 className="font-bold text-gray-800 mb-4 border-b pb-2">Nhật Ký Lỗi & Khắc Phục</h3>
+                       <div className="overflow-x-auto rounded-lg border border-gray-200">
+                        <table className="w-full border-collapse">
+                            <thead>
+                                <tr className="bg-gray-100 text-left text-xs font-bold text-gray-600 uppercase">
+                                    <th className="p-3 border-r border-gray-200 w-24 text-center">Ngày</th>
+                                    <th className="p-3 border-r border-gray-200 w-32 text-center text-blue-700">Phiếu SX</th>
+                                    <th className="p-3 border-r border-gray-200 w-[40%]">Chi tiết Lỗi</th>
+                                    <th className="p-3 w-[40%]">Khắc phục</th>
+                                </tr>
+                            </thead>
+                            <tbody className="text-sm">
+                                {groupedData.map((group) => (
+                                    <React.Fragment key={group.date}>
+                                        {group.pos.map((po, poIndex) => (
+                                            <React.Fragment key={`${group.date}-${po}`}>
+                                                {deptOptions.map((dept, deptIndex) => {
+                                                    const record = formData.savedRecords?.find(r => 
+                                                        r.timestamp.includes(group.date) && 
+                                                        (r.productionOrder === po || (!r.productionOrder && po === 'N/A')) &&
+                                                        r.dept === dept
+                                                    );
+                                                    const errLog = !record ? formData.errorLog?.find(e => 
+                                                        e.date === group.date && 
+                                                        (e.productionOrder === po || (!e.productionOrder && po === 'N/A')) &&
+                                                        e.dept === dept
+                                                    ) : null;
+
+                                                    const content = record?.content || errLog?.errorContent || '';
+                                                    const solution = record?.solution || errLog?.solution || '';
+                                                    const images = record?.images || [];
+                                                    const dateRowSpan = group.pos.length * 4;
+
+                                                    return (
+                                                        <tr key={`${group.date}-${po}-${dept}`} className="border-b border-gray-100 hover:bg-gray-50">
+                                                            {poIndex === 0 && deptIndex === 0 && (
+                                                                <td rowSpan={dateRowSpan} className="p-3 border-r border-gray-200 align-top bg-white font-bold text-gray-700 text-center">
+                                                                    {group.date}
+                                                                </td>
+                                                            )}
+                                                            {deptIndex === 0 && (
+                                                                <td rowSpan={4} className="p-3 border-r border-gray-200 align-top bg-gray-50 font-mono font-bold text-blue-700 text-center text-xs">
+                                                                    {po}
+                                                                </td>
+                                                            )}
+                                                            <td className="p-3 border-r border-gray-200 align-top">
+                                                                <div className="flex gap-3">
+                                                                    <div className={`w-8 h-8 rounded flex items-center justify-center flex-shrink-0 border ${getDeptColor(dept)}`}>
+                                                                        {renderDeptIcon(dept)}
+                                                                    </div>
+                                                                    <div className="flex-1">
+                                                                        <div className="font-bold text-xs text-gray-500 uppercase mb-1">{dept}</div>
+                                                                        {content ? (
+                                                                            <>
+                                                                                <p className="text-gray-800 mb-2">{content}</p>
+                                                                                {images.length > 0 && (
+                                                                                    <div className="flex gap-2 flex-wrap">
+                                                                                        {images.map((img, i) => (
+                                                                                            <img 
+                                                                                                key={i} 
+                                                                                                src={img} 
+                                                                                                className="w-16 h-16 object-cover rounded border border-gray-200 bg-white shadow-sm cursor-zoom-in" 
+                                                                                                alt="Err" 
+                                                                                                onClick={() => setViewImage(img)}
+                                                                                            />
+                                                                                        ))}
+                                                                                    </div>
+                                                                                )}
+                                                                            </>
+                                                                        ) : (
+                                                                            <span className="text-gray-300 italic text-xs">Không có ghi nhận</span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="p-3 align-top">
+                                                                {solution ? (
+                                                                    <p className="text-green-700 bg-green-50 p-2 rounded border border-green-100 text-xs">{solution}</p>
+                                                                ) : (
+                                                                    <span className="text-gray-300 italic text-xs">---</span>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </React.Fragment>
+                                        ))}
+                                    </React.Fragment>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                   </div>
               </div>
           )}
           
@@ -99,41 +505,166 @@ const DocumentDetail: React.FC<DocumentDetailProps> = ({ document, onSave }) => 
                           <div key={idx} className={`flex gap-3 ${msg.isMe ? 'flex-row-reverse' : ''}`}>
                               <div className={`p-3 rounded-2xl max-w-[80%] text-sm shadow-sm ${msg.isMe ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-800'}`}>
                                   {msg.message}
+                                  <div className={`text-[10px] mt-1 ${msg.isMe ? 'text-blue-200' : 'text-gray-400'}`}>{msg.timestamp}</div>
                               </div>
                           </div>
                       ))}
                   </div>
                   <div className="p-4 border-t flex gap-2 bg-gray-50">
-                      <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendChat()} className="flex-1 border rounded-full px-4 py-2 text-sm outline-none" placeholder="Nhập tin nhắn..." />
-                      <button onClick={handleSendChat} className="bg-blue-600 text-white p-2 rounded-full"><IconSend className="w-5 h-5"/></button>
+                      <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendChat()} className="flex-1 border rounded-full px-4 py-2 text-sm focus:outline-none focus:border-blue-500" placeholder="Nhập tin nhắn..." />
+                      <button onClick={handleSendChat} className="bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 transition"><IconSend className="w-5 h-5"/></button>
                   </div>
                </div>
           )}
 
-          {activeTab === 'Duyệt' && (
-               <div className="space-y-6">
-                   <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200">
-                       <h4 className="font-bold text-gray-800 flex items-center gap-2 text-lg"><IconTransfer className="w-6 h-6 text-blue-600" />Phê duyệt & Ghi nhận Lỗi</h4>
-                   </div>
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                       {deptOptions.map((dept) => (
-                           <div key={dept} className="bg-white border rounded-xl p-4 shadow-sm">
-                               <div className="flex items-center gap-2 font-bold text-gray-700 mb-3">{renderDeptIcon(dept)}{dept}</div>
-                               <input type="text" placeholder="Nội dung lỗi..." className="w-full text-sm border border-gray-200 rounded p-2 mb-2 outline-none"/>
-                               <input type="text" placeholder="Cách khắc phục..." className="w-full text-sm border border-gray-200 rounded p-2 outline-none"/>
-                               <button className="w-full mt-2 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-bold">Lưu {dept}</button>
-                           </div>
-                       ))}
-                   </div>
-               </div>
-          )}
-          
           {activeTab === 'TCKT' && (
-              <div className="text-center py-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
-                  <IconCalendar className="w-12 h-12 mx-auto mb-2 opacity-20"/>
-                  <p>Chưa có dữ liệu TCKT. Hãy chat với cú pháp "TCKT: ..." để thêm mới.</p>
+              <div className="space-y-6 max-w-5xl mx-auto">
+                   <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                      <h3 className="text-lg font-bold text-gray-800 mb-2">Tiêu Chuẩn Kỹ Thuật (TCKT)</h3>
+                      <p className="text-sm text-gray-500 mb-6">Lưu trữ hình ảnh và ghi chú kỹ thuật theo ngày và phiếu sản xuất.</p>
+
+                      <div className="space-y-8">
+                          {tcktData.map(dayGroup => (
+                              <div key={dayGroup.date} className="relative border-l-2 border-blue-200 pl-6 pb-2">
+                                  <div className="absolute -left-2 top-0 w-4 h-4 bg-blue-500 rounded-full border-2 border-white"></div>
+                                  <h4 className="font-bold text-blue-800 mb-4 text-lg flex items-center gap-2">
+                                      <IconCalendar className="w-5 h-5"/> {dayGroup.date}
+                                  </h4>
+                                  
+                                  {dayGroup.pos.map(poGroup => (
+                                      <div key={poGroup.po} className="mb-6 bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                          <div className="font-bold text-gray-700 mb-3 flex items-center gap-2">
+                                              <span className="bg-white px-2 py-1 rounded border border-gray-300 text-sm">Phiếu: {poGroup.po}</span>
+                                          </div>
+                                          <div className="space-y-3">
+                                              {poGroup.items.map(record => (
+                                                  <div key={record.id} className="bg-white p-3 rounded border border-gray-100 shadow-sm flex gap-4">
+                                                      <div className="flex-1">
+                                                          <div className="flex justify-between items-start mb-1">
+                                                              <span className="font-bold text-xs text-blue-600">{record.user}</span>
+                                                              <span className="text-[10px] text-gray-400">{record.timestamp}</span>
+                                                          </div>
+                                                          <p className="text-sm text-gray-800">{record.content}</p>
+                                                          {record.images && record.images.length > 0 && (
+                                                              <div className="mt-2 flex gap-2 overflow-x-auto">
+                                                                  {record.images.map((img, i) => (
+                                                                      <img 
+                                                                          key={i} 
+                                                                          src={img} 
+                                                                          className="h-24 rounded border border-gray-200 cursor-zoom-in" 
+                                                                          alt="tckt" 
+                                                                          onClick={() => setViewImage(img)}
+                                                                      />
+                                                                  ))}
+                                                              </div>
+                                                          )}
+                                                      </div>
+                                                  </div>
+                                              ))}
+                                          </div>
+                                      </div>
+                                  ))}
+                              </div>
+                          ))}
+                          
+                          {tcktData.length === 0 && (
+                              <div className="text-center text-gray-400 py-10 border-2 border-dashed border-gray-200 rounded-xl">
+                                  <p>Chưa có dữ liệu TCKT. Hãy chat với cú pháp "TCKT: ..." để thêm mới.</p>
+                              </div>
+                          )}
+                      </div>
+                   </div>
               </div>
           )}
+
+          {activeTab === 'Duyệt' && (
+               <div className="space-y-8 max-w-6xl mx-auto" id="review-form">
+                   {!editingRecordId && (
+                       <div className="space-y-6">
+                           <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200">
+                               <h4 className="font-bold text-gray-800 flex items-center gap-2 text-lg">
+                                  <IconTransfer className="w-6 h-6 text-blue-600" />
+                                  Phê duyệt & Ghi nhận Lỗi
+                               </h4>
+                               <div className="text-sm font-bold text-blue-700 bg-blue-100 px-3 py-1 rounded-full border border-blue-200">
+                                   Phiếu SX: {formData.productionOrder || 'Chưa nhập'}
+                               </div>
+                           </div>
+
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                               {deptOptions.map((dept) => {
+                                   const relevantDrafts = (formData.draftQueue || []).filter(d => d.autoDept === dept);
+                                   const hasDrafts = relevantDrafts.length > 0;
+                                   const form = deptForms[dept];
+                                   const isActive = form.content || form.solution || hasDrafts;
+
+                                   return (
+                                       <div key={dept} className={`border rounded-xl p-4 transition-all duration-300 ${isActive ? 'bg-white shadow-md border-gray-300' : 'bg-gray-50 border-gray-200 opacity-90'}`}>
+                                           <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
+                                               <div className="flex items-center gap-2 font-bold text-gray-700">
+                                                   {renderDeptIcon(dept)}
+                                                   {dept}
+                                               </div>
+                                               {hasDrafts && (
+                                                   <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">
+                                                       {relevantDrafts.length} ảnh/tin
+                                                   </span>
+                                               )}
+                                           </div>
+
+                                           {hasDrafts && (
+                                               <div className="flex gap-2 overflow-x-auto pb-2 mb-3 no-scrollbar">
+                                                   {relevantDrafts.map((d) => (
+                                                       <div key={d.id} className="relative flex-shrink-0 group cursor-pointer">
+                                                           {d.type === 'image' ? (
+                                                               <img 
+                                                                  src={d.content} 
+                                                                  className="h-16 w-16 object-cover rounded border border-gray-200" 
+                                                                  alt="draft" 
+                                                                  onClick={() => setViewImage(d.content)}
+                                                               />
+                                                           ) : (
+                                                               <div className="h-16 w-24 bg-gray-100 p-1 text-[10px] overflow-hidden rounded border border-gray-200">
+                                                                   {d.content}
+                                                               </div>
+                                                           )}
+                                                       </div>
+                                                   ))}
+                                               </div>
+                                           )}
+
+                                           <div className="space-y-3">
+                                               <input 
+                                                   type="text" 
+                                                   placeholder="Nội dung lỗi..." 
+                                                   className="w-full text-sm border border-gray-200 rounded p-2 focus:ring-1 focus:ring-blue-300 outline-none"
+                                                   value={form.content}
+                                                   onChange={(e) => updateDeptForm(dept, 'content', e.target.value)}
+                                               />
+                                               <input 
+                                                   type="text" 
+                                                   placeholder="Cách khắc phục..." 
+                                                   className="w-full text-sm border border-gray-200 rounded p-2 focus:ring-1 focus:ring-blue-300 outline-none"
+                                                   value={form.solution}
+                                                   onChange={(e) => updateDeptForm(dept, 'solution', e.target.value)}
+                                               />
+                                           </div>
+                                           
+                                           <button 
+                                              onClick={() => handleSaveDept(dept)}
+                                              className="w-full mt-3 py-2 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg text-sm font-bold hover:bg-blue-600 hover:text-white transition-colors"
+                                           >
+                                               Lưu {dept}
+                                           </button>
+                                       </div>
+                                   );
+                               })}
+                           </div>
+                       </div>
+                   )}
+               </div>
+          )}
+
       </div>
     </div>
   );

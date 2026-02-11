@@ -38,7 +38,7 @@ const DocumentList: React.FC<DocumentListProps> = ({ documents, selectedId, onSe
       </div>
 
       <div className="flex-1 overflow-y-auto no-scrollbar p-2 space-y-2 bg-gray-50/50">
-        {Object.entries(groupedDocs).map(([clientName, clientDocs]) => (
+        {Object.entries(groupedDocs).map(([clientName, clientDocs]: [string, DocumentData[]]) => (
           <div key={clientName} className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
             <div onClick={() => toggleClient(clientName)} className="flex items-center justify-between p-3 cursor-pointer hover:bg-blue-50 transition-colors select-none">
               <div className="flex items-center gap-3">
