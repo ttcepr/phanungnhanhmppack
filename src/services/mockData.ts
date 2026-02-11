@@ -1,8 +1,16 @@
-import { DocumentData, DocStatus, DashboardStats, Employee } from '../types';
+import { DocumentData, DocStatus, DashboardStats, Employee, LoginLog } from '../types';
 
 export const mockEmployees: Employee[] = [
-    { id: 'NV001', name: 'Nguyễn Văn A', role: 'Trưởng ca In', dept: 'IN', status: 'Online', avatar: 'https://ui-avatars.com/api/?name=Nguyen+Van+A&background=0D8ABC&color=fff' },
-    { id: 'thai', name: 'Admin Manager', role: 'Quản lý SX', dept: 'VĂN PHÒNG', status: 'Online', avatar: 'https://ui-avatars.com/api/?name=Admin+Manager&background=random', isAdmin: true },
+    { id: 'NV001', name: 'Nguyễn Văn A', password: '123', role: 'Trưởng ca In', dept: 'IN', status: 'Online', avatar: 'https://ui-avatars.com/api/?name=Nguyen+Van+A&background=0D8ABC&color=fff' },
+    { id: 'thai', name: 'Admin Manager', password: 'admin', role: 'Quản lý SX', dept: 'VĂN PHÒNG', status: 'Online', avatar: 'https://ui-avatars.com/api/?name=Admin+Manager&background=random', isAdmin: true },
+];
+
+export const mockLoginLogs: LoginLog[] = [
+    { id: 'log1', userId: 'thai', userName: 'Admin Manager', timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(), deviceInfo: 'Chrome / Desktop', status: 'Success' },
+    { id: 'log2', userId: 'NV001', userName: 'Nguyễn Văn A', timestamp: new Date(Date.now() - 1000 * 60 * 120).toISOString(), deviceInfo: 'Mobile Safari', status: 'Success' },
+    { id: 'log3', userId: 'NV002', userName: 'Trần Thị B', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(), deviceInfo: 'Mobile Chrome', status: 'Failed' },
+    { id: 'log4', userId: 'NV001', userName: 'Nguyễn Văn A', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), deviceInfo: 'Mobile Safari', status: 'Success' },
+    { id: 'log5', userId: 'thai', userName: 'Admin Manager', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 25).toISOString(), deviceInfo: 'Chrome / Desktop', status: 'Success' },
 ];
 
 export const mockDocuments: DocumentData[] = [

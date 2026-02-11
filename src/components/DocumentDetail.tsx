@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { DocumentData, ChatMessage, SavedRecord, DeptType, ProductionError, DraftItem, TCKTRecord, DocStatus } from '../types';
-import { IconSave, IconSend, IconUpload, IconCheck, IconImage, IconTransfer, IconBox, IconWave, IconInk, IconScissor, IconWarehouse, IconPlus, IconSettings, IconUsers, IconCalendar, IconDatabase } from './Icons';
+import { IconSave, IconSend, IconUpload, IconCheck, IconImage, IconTransfer, IconBox, IconWave, IconInk, IconScissor, IconWarehouse, IconPlus, IconSettings, IconUsers, IconCalendar, IconDatabase, IconPrinter, IconFile } from './Icons';
 import { compressImage } from '../utils/helpers';
 import ImageViewer from './ImageViewer';
 
@@ -104,6 +104,10 @@ const DocumentDetail: React.FC<DocumentDetailProps> = ({ document, onSave }) => 
           alert("MÔ PHỎNG (Vercel Mode): Đã tạo file Google Sheet thành công!\n(Đã cập nhật link giả lập vào hồ sơ)");
           window.open(mockUrl, '_blank');
       }, 1500);
+  };
+
+  const handleDownloadExcel = () => {
+      alert("Đang tạo file Excel báo cáo chi tiết... \n(File sẽ tự động tải xuống sau khi hoàn tất)");
   };
 
   // --- CHAT LOGIC ---
@@ -389,20 +393,118 @@ const DocumentDetail: React.FC<DocumentDetailProps> = ({ document, onSave }) => 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6 bg-gray-100/50">
           {activeTab === 'Tổng quan' && (
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 max-w-4xl mx-auto">
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 max-w-4xl mx-auto space-y-8">
+                  {/* Basic Info */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div><label className="text-xs font-bold text-gray-500 block mb-1">Mã SP</label><input type="text" readOnly value={formData.docNumber} className="w-full bg-gray-100 border rounded p-2 text-sm"/></div>
                       <div><label className="text-xs font-bold text-gray-500 block mb-1">Tên SP</label><input type="text" readOnly value={formData.title} className="w-full bg-gray-100 border rounded p-2 text-sm"/></div>
                       <div><label className="text-xs font-bold text-blue-600 block mb-1">Phiếu SX</label><input type="text" value={formData.productionOrder || ''} onChange={(e) => setFormData({...formData, productionOrder: e.target.value})} className="w-full border border-blue-300 rounded p-2 text-sm font-bold"/></div>
                   </div>
-                  <div className="mt-6 border-t pt-4">
-                      <h3 className="font-bold text-gray-800 mb-2">Thông số kỹ thuật</h3>
-                      <pre className="bg-gray-50 p-4 rounded text-xs overflow-auto">{JSON.stringify(formData.specs, null, 2)}</pre>
+
+                  {/* Specs Table (Replaced raw JSON) */}
+                  <div className="border-t pt-4">
+                      <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                          <IconSettings className="w-5 h-5 text-gray-500" />
+                          Thông số kỹ thuật
+                      </h3>
+                      {formData.specs ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                              <div className="flex justify-between border-b border-gray-100 pb-1">
+                                  <span className="text-gray-500">Kích thước:</span>
+                                  <span className="font-medium">{formData.specs.dimensions}</span>
+                              </div>
+                              <div className="flex justify-between border-b border-gray-100 pb-1">
+                                  <span className="text-gray-500">Kiểu dáng (Box Type):</span>
+                                  <span className="font-medium">{formData.specs.boxType}</span>
+                              </div>
+                              <div className="flex justify-between border-b border-gray-100 pb-1">
+                                  <span className="text-gray-500">Chất liệu giấy:</span>
+                                  <span className="font-medium">{formData.specs.paperMaterial}</span>
+                              </div>
+                              <div className="flex justify-between border-b border-gray-100 pb-1">
+                                  <span className="text-gray-500">Loại sóng:</span>
+                                  <span className="font-medium">{formData.specs.fluteType}</span>
+                              </div>
+                              <div className="flex justify-between border-b border-gray-100 pb-1">
+                                  <span className="text-gray-500">Số lớp:</span>
+                                  <span className="font-medium">{formData.specs.layers} lớp</span>
+                              </div>
+                              <div className="flex justify-between border-b border-gray-100 pb-1">
+                                  <span className="text-gray-500">Công nghệ in:</span>
+                                  <span className="font-medium">{formData.specs.printType}</span>
+                              </div>
+                              <div className="flex justify-between border-b border-gray-100 pb-1">
+                                  <span className="text-gray-500">Số màu:</span>
+                                  <span className="font-medium">{formData.specs.colors} màu</span>
+                              </div>
+                          </div>
+                      ) : (
+                          <div className="text-gray-400 italic text-sm">Chưa cập nhật thông số kỹ thuật.</div>
+                      )}
+                  </div>
+
+                  {/* Departments Images & Progress Section */}
+                  <div className="border-t pt-4">
+                      <div className="flex justify-between items-center mb-4">
+                          <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                              <IconImage className="w-5 h-5 text-gray-500" />
+                              Tiến độ & Hình ảnh sản xuất
+                          </h3>
+                          <button 
+                              onClick={handleDownloadExcel}
+                              className="text-xs flex items-center gap-1 bg-green-50 text-green-700 px-3 py-1.5 rounded-lg border border-green-200 hover:bg-green-100 transition font-bold"
+                          >
+                              <IconFile className="w-4 h-4"/> Tải báo cáo Excel
+                          </button>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          {deptOptions.map(dept => {
+                              // Filter images for this department from savedRecords (approved) or draftQueue (pending)
+                              const approvedImgs = formData.savedRecords?.filter(r => r.dept === dept).flatMap(r => r.images) || [];
+                              const pendingImgs = formData.draftQueue?.filter(d => d.autoDept === dept && d.type === 'image').map(d => d.content) || [];
+                              const allImgs = [...approvedImgs, ...pendingImgs];
+                              const hasData = allImgs.length > 0;
+
+                              return (
+                                  <div key={dept} className={`border rounded-xl p-3 flex flex-col h-full ${hasData ? 'bg-white border-gray-300' : 'bg-gray-50 border-dashed border-gray-200'}`}>
+                                      <div className="flex items-center gap-2 mb-3">
+                                          <div className={`p-1.5 rounded-lg ${getDeptColor(dept)} border-0`}>{renderDeptIcon(dept)}</div>
+                                          <span className="font-bold text-xs text-gray-700">{dept}</span>
+                                      </div>
+                                      
+                                      {hasData ? (
+                                          <div className="grid grid-cols-2 gap-2 mt-auto">
+                                              {allImgs.slice(0, 4).map((img, i) => (
+                                                  <div key={i} className="aspect-square rounded overflow-hidden border border-gray-100 relative group">
+                                                      <img 
+                                                          src={img} 
+                                                          className="w-full h-full object-cover cursor-zoom-in hover:scale-110 transition-transform" 
+                                                          onClick={() => setViewImage(img)}
+                                                          alt={dept} 
+                                                      />
+                                                  </div>
+                                              ))}
+                                              {allImgs.length > 4 && (
+                                                  <div className="aspect-square rounded bg-gray-100 flex items-center justify-center text-xs text-gray-500 font-bold border border-gray-200">
+                                                      +{allImgs.length - 4}
+                                                  </div>
+                                              )}
+                                          </div>
+                                      ) : (
+                                          <div className="flex-1 flex items-center justify-center text-gray-300 text-xs italic py-4">
+                                              Chưa có ảnh
+                                          </div>
+                                      )}
+                                  </div>
+                              );
+                          })}
+                      </div>
                   </div>
                   
                   {/* Error Logs Table */}
-                   <div className="mt-8">
-                      <h3 className="font-bold text-gray-800 mb-4 border-b pb-2">Nhật Ký Lỗi & Khắc Phục</h3>
+                   <div className="mt-8 border-t pt-4">
+                      <h3 className="font-bold text-gray-800 mb-4">Nhật Ký Lỗi & Khắc Phục</h3>
                        <div className="overflow-x-auto rounded-lg border border-gray-200">
                         <table className="w-full border-collapse">
                             <thead>
